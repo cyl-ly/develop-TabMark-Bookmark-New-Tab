@@ -606,40 +606,33 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   
   switch (request.action) {
     case 'fetchBookmarks':
-      chrome.bookmarks.getTree(async (bookmarkTreeNodes) => {
+      chrome.bookmarks.getTree((bookmarkTreeNodes) => {
         if (chrome.runtime.lastError) {
           sendResponse({ error: chrome.runtime.lastError.message });
-        } else {
-          try {
-            const folders = await new Promise((resolve) => {
-              chrome.bookmarks.getTree((tree) => {
-                resolve(tree);
-              });
-            });
-            
-            const processedBookmarks = [];
-            
-            function processBookmarkNode(node) {
-              if (node.url) {
-                processedBookmarks.push(node);
-              }
-              if (node.children) {
-                node.children.forEach(processBookmarkNode);
-              }
+          return;
+        }
+
+        try {
+          const processedBookmarks = [];
+
+          function processBookmarkNode(node) {
+            if (node.url) {
+              processedBookmarks.push(node);
             }
-            
-            folders.forEach(folder => {
-              processBookmarkNode(folder);
-            });
-            
-            sendResponse({ 
-              bookmarks: bookmarkTreeNodes,
-              processedBookmarks: processedBookmarks,
-              success: true 
-            });
-          } catch (error) {
-            sendResponse({ error: error.message });
+            if (node.children) {
+              node.children.forEach(processBookmarkNode);
+            }
           }
+
+          bookmarkTreeNodes.forEach(processBookmarkNode);
+
+          sendResponse({
+            bookmarks: bookmarkTreeNodes,
+            processedBookmarks,
+            success: true
+          });
+        } catch (error) {
+          sendResponse({ error: error.message });
         }
       });
       return true;

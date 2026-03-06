@@ -7,6 +7,22 @@ document.addEventListener('DOMContentLoaded', function () {
   // 添加快捷链接专用的状态变量
   let quickLinkToDelete = null;
 
+
+  const SEARCH_ENGINE_BLACKLIST_DOMAINS = [
+    'kimi.moonshot.cn',
+    'www.doubao.com',
+    'chatgpt.com',
+    'felo.ai',
+    'metaso.cn',
+    'www.google.com',
+    'cn.bing.com',
+    'www.baidu.com',
+    'www.sogou.com',
+    'www.so.com',
+    'www.360.cn',
+    'chrome-extension://amkgcblhdallfcijnbmjahooalabjaao'
+  ];
+
   function faviconURL(u) {
     const url = new URL(chrome.runtime.getURL("/_favicon/"));
     url.searchParams.set("pageUrl", u);
@@ -192,161 +208,130 @@ document.addEventListener('DOMContentLoaded', function () {
     data: null,
     timestamp: 0,
     maxAge: 5 * 60 * 1000, // 5分钟缓存
+    refreshMinInterval: 60 * 1000,
+    lastRefreshAttempt: 0,
     
     isValid() {
       return this.data && (Date.now() - this.timestamp < this.maxAge);
+    },
+
+    shouldRefreshInBackground() {
+      return Date.now() - this.lastRefreshAttempt >= this.refreshMinInterval;
+    },
+
+    markRefreshAttempt() {
+      this.lastRefreshAttempt = Date.now();
     },
     
     set(data) {
       this.data = data;
       this.timestamp = Date.now();
-      // 将数据保存到 localStorage
       localStorage.setItem('quickLinksCache', JSON.stringify({
         data: data,
-        timestamp: this.timestamp
+        timestamp: this.timestamp,
+        lastRefreshAttempt: this.lastRefreshAttempt
       }));
     },
     
     load() {
       const cached = localStorage.getItem('quickLinksCache');
       if (cached) {
-        const { data, timestamp } = JSON.parse(cached);
+        const { data, timestamp, lastRefreshAttempt } = JSON.parse(cached);
         this.data = data;
         this.timestamp = timestamp;
+        this.lastRefreshAttempt = lastRefreshAttempt || 0;
       }
     }
   };
 
-  // 2. 优化生成快速链接函数
-  async function generateQuickLinks() {
-    // 首先尝试使用缓存数据快速渲染
-    if (quickLinksCache.isValid()) {
-      renderQuickLinks(quickLinksCache.data);
-      
-      
-      // 在后台更新缓存
-      updateQuickLinksCache();
-      return;
-    }
-    
-    // 如果没有有效缓存，则正常加载
-    const fixedShortcuts = await getFixedShortcuts();
-    const fixedUrls = new Set(fixedShortcuts.map(shortcut => shortcut.url));
+
+  async function ensureSearchEngineDomainsBlacklisted() {
     const blacklist = await getBlacklist();
-    
-    // 添加搜索引擎域名到黑名单
-    const searchEngineDomains = [
-      'kimi.moonshot.cn',
-      'www.doubao.com',
-      'chatgpt.com',
-      'felo.ai',
-      'metaso.cn',
-      'www.google.com',
-      'cn.bing.com',
-      'www.baidu.com',
-      'www.sogou.com',
-      'www.so.com',
-      'www.360.cn',
-      'chrome-extension://amkgcblhdallfcijnbmjahooalabjaao'  // 添加扩展自身的URL
-    ];
+    const missingDomains = SEARCH_ENGINE_BLACKLIST_DOMAINS.filter(domain => !blacklist.includes(domain));
 
-    // 将搜索引擎域名添加到黑名单
-    for (const domain of searchEngineDomains) {
-      if (!blacklist.includes(domain)) {
-        await addToBlacklist(domain);
-      }
+    if (missingDomains.length === 0) {
+      return blacklist;
     }
 
-    // 重新获取更新后的黑名单
-    const updatedBlacklist = await getBlacklist();
-    
+    const updatedBlacklist = [...blacklist, ...missingDomains];
+    await new Promise((resolve) => {
+      chrome.storage.sync.set({ blacklist: updatedBlacklist }, resolve);
+    });
+
+    return updatedBlacklist;
+  }
+
+  function fetchRecentHistoryItems() {
     const oneMonthAgo = new Date();
     oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
 
-    chrome.history.search({ 
-      text: '', 
-      startTime: oneMonthAgo.getTime(),
-      maxResults: 1000
-    }, function (historyItems) {
-      const sortedHistory = sortHistoryItems(historyItems);
-      const uniqueDomains = new Set();
-      const allShortcuts = [];
-
-      // 首先添加固定的快捷方式
-      fixedShortcuts.forEach(shortcut => {
-        const domain = new URL(shortcut.url).hostname;
-        if (!updatedBlacklist.includes(domain)) {
-          allShortcuts.push(shortcut);
-          uniqueDomains.add(domain);
-        }
-      });
-
-      // 然后添加历史记录中的项目
-      for (const item of sortedHistory) {
-        const domain = new URL(item.url).hostname;
-        if (!fixedUrls.has(item.url) && !uniqueDomains.has(domain) && allShortcuts.length < MAX_DISPLAY && !updatedBlacklist.includes(domain)) {
-          uniqueDomains.add(domain);
-          allShortcuts.push({
-            name: getSiteName(item.title, item.url),
-            url: item.url,
-            favicon: faviconURL(item.url),
-            fixed: false
-          });
-        }
-      }
-
-      renderQuickLinks(allShortcuts);
-      
+    return new Promise((resolve) => {
+      chrome.history.search({
+        text: '',
+        startTime: oneMonthAgo.getTime(),
+        maxResults: 1000
+      }, resolve);
     });
+  }
+
+  function buildQuickLinksFromHistory(historyItems, fixedShortcuts, blacklist) {
+    const fixedUrls = new Set(fixedShortcuts.map(shortcut => shortcut.url));
+    const sortedHistory = sortHistoryItems(historyItems);
+    const uniqueDomains = new Set();
+    const allShortcuts = [];
+
+    fixedShortcuts.forEach(shortcut => {
+      const domain = new URL(shortcut.url).hostname;
+      if (!blacklist.includes(domain)) {
+        allShortcuts.push(shortcut);
+        uniqueDomains.add(domain);
+      }
+    });
+
+    for (const item of sortedHistory) {
+      const domain = new URL(item.url).hostname;
+      if (!fixedUrls.has(item.url) && !uniqueDomains.has(domain) && allShortcuts.length < MAX_DISPLAY && !blacklist.includes(domain)) {
+        uniqueDomains.add(domain);
+        allShortcuts.push({
+          name: getSiteName(item.title, item.url),
+          url: item.url,
+          favicon: faviconURL(item.url),
+          fixed: false
+        });
+      }
+    }
+
+    return allShortcuts;
+  }
+
+  // 2. 优化生成快速链接函数
+  async function generateQuickLinks() {
+    if (quickLinksCache.isValid()) {
+      renderQuickLinks(quickLinksCache.data);
+      if (quickLinksCache.shouldRefreshInBackground()) {
+        quickLinksCache.markRefreshAttempt();
+        updateQuickLinksCache();
+      }
+      return;
+    }
+
+    const fixedShortcuts = await getFixedShortcuts();
+    const blacklist = await ensureSearchEngineDomainsBlacklisted();
+    const historyItems = await fetchRecentHistoryItems();
+    const allShortcuts = buildQuickLinksFromHistory(historyItems, fixedShortcuts, blacklist);
+
+    renderQuickLinks(allShortcuts);
   }
 
   // 3. 添加后台更新缓存的函数
   async function updateQuickLinksCache() {
+    quickLinksCache.markRefreshAttempt();
     const fixedShortcuts = await getFixedShortcuts();
-    const fixedUrls = new Set(fixedShortcuts.map(shortcut => shortcut.url));
-    const blacklist = await getBlacklist();
-    
-    // 重新获取更新后的黑名单
-    const updatedBlacklist = await getBlacklist();
-    
-    const oneMonthAgo = new Date();
-    oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
+    const blacklist = await ensureSearchEngineDomainsBlacklisted();
+    const historyItems = await fetchRecentHistoryItems();
+    const allShortcuts = buildQuickLinksFromHistory(historyItems, fixedShortcuts, blacklist);
 
-    chrome.history.search({ 
-      text: '', 
-      startTime: oneMonthAgo.getTime(),
-      maxResults: 1000
-    }, function (historyItems) {
-      const sortedHistory = sortHistoryItems(historyItems);
-      const uniqueDomains = new Set();
-      const allShortcuts = [];
-
-      // 首先添加固定的快捷方式
-      fixedShortcuts.forEach(shortcut => {
-        const domain = new URL(shortcut.url).hostname;
-        if (!updatedBlacklist.includes(domain)) {
-          allShortcuts.push(shortcut);
-          uniqueDomains.add(domain);
-        }
-      });
-
-      // 然后添加历史记录中的项目
-      for (const item of sortedHistory) {
-        const domain = new URL(item.url).hostname;
-        if (!fixedUrls.has(item.url) && !uniqueDomains.has(domain) && allShortcuts.length < MAX_DISPLAY && !updatedBlacklist.includes(domain)) {
-          uniqueDomains.add(domain);
-          allShortcuts.push({
-            name: getSiteName(item.title, item.url),
-            url: item.url,
-            favicon: faviconURL(item.url),
-            fixed: false
-          });
-        }
-      }
-
-      // 更新缓存
-      quickLinksCache.set(allShortcuts);
-    });
+    quickLinksCache.set(allShortcuts);
   }
 
   // 3. 优化渲染函数，使用 DocumentFragment 减少重排
@@ -959,10 +944,8 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   // 初始化
-  generateQuickLinks();
-
-  // 加载缓存
   quickLinksCache.load();
+  generateQuickLinks();
 
   // 定义主页路径模式
   const MAIN_PAGE_PATTERNS = {

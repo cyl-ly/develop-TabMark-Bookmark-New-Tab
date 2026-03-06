@@ -22,9 +22,6 @@ let itemToDelete = null;
 // Define and initialize the variables
 let bookmarkFolderContextMenu = null;
 let currentBookmarkFolder = null;
-let lastStorageWrite = 0;
-let pendingWrite = null;
-const STORAGE_WRITE_INTERVAL = 1000; // 1秒的节流间隔
 // 在文件顶部添加导入语句
 import { ICONS } from './icons.js';
 
@@ -229,12 +226,6 @@ function openEditDialog(bookmark) {
   });
 }
 
-function updateThemeIcon(isDark) {
-  const themeToggleBtn = document.getElementById('theme-toggle-btn');
-  if (!themeToggleBtn) return;
-
-  themeToggleBtn.innerHTML = isDark ? ICONS.dark_mode : ICONS.light_mode;
-}
 import { replaceIconsWithSvg, getIconHtml } from './icons.js';
 
 document.addEventListener('DOMContentLoaded', function () {
@@ -517,12 +508,6 @@ document.addEventListener('DOMContentLoaded', () => {
     updateSearchEngineIcon(defaultEngine);
   }
 });
-
-// 同样，将这个函数也移到全作用域
-function setDefaultIcon(iconElement) {
-  iconElement.src = '../images/default-search-icon.png';
-  iconElement.alt = 'Default Search Engine';
-}
 
 // 1. 首先定义全局变量
 let bookmarksList;
@@ -1013,10 +998,6 @@ document.addEventListener('DOMContentLoaded', function () {
   const searchEngineIcon = document.getElementById('search-engine-icon');
   const defaultSearchEngine = localStorage.getItem('selectedSearchEngine') || 'google';
   console.log('[Init] Default search engine:', localStorage.getItem('selectedSearchEngine'));
-  let deletedBookmark = null;
-  let deletedCategory = null; // 添加这行
-  let deleteTimeout = null;
-  let bookmarkTreeNodes = []; // 定义全局变量
   // 调用 updateBookmarkCards
   updateBookmarkCards();
   
@@ -1256,19 +1237,6 @@ function showErrorFeedback(element) {
   setTimeout(() => {
     element.style.backgroundColor = '';
   }, 1000);
-}
-
-function openCategory(category) {
-  if (category && category.classList.contains('folder-item')) {
-    document.querySelectorAll('#categories-list li').forEach(function (item) {
-      item.classList.remove('bg-emerald-500');
-    });
-    category.classList.add('bg-emerald-500');
-
-    if (category.dataset.id) {
-      updateBookmarksDisplay(category.dataset.id);
-    }
-  }
 }
 
 // 移除所有 defaultBookmarkId 相关的代码
@@ -6208,8 +6176,6 @@ document.addEventListener('DOMContentLoaded', function () {
       .map(engine => getSearchUrl(engine.name, query));
 
     if (urls.length > 0) {
-      window.lastSearchTrigger = 'cmdCtrlEnter';
-
       chrome.runtime.sendMessage({
         action: 'openMultipleTabsAndGroup',
         urls: urls,

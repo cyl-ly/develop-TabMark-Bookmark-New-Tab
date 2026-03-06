@@ -1,5 +1,3 @@
-import { featureTips } from './feature-tips.js';
-
 // 书签清理插件相关常量
 const CLEANUP_EXTENSION = {
   ID: 'aeehapalakdoclgmfeondmephgiandef',

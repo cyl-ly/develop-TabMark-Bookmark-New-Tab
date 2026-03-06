@@ -1847,6 +1847,10 @@ function renderBookmarkFilterTabs() {
     tag.addEventListener('click', () => {
       switchBookmarkFilterTab(tab.id);
     });
+    tag.addEventListener('contextmenu', () => {
+      window.getSelection?.()?.removeAllRanges?.();
+      tag.blur();
+    });
     filterBar.appendChild(tag);
   });
 

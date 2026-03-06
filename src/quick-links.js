@@ -308,7 +308,7 @@ document.addEventListener('DOMContentLoaded', function () {
   async function generateQuickLinks() {
     if (quickLinksCache.isValid()) {
       renderQuickLinks(quickLinksCache.data);
-      if (quickLinksCache.shouldRefreshInBackground()) {
+      if (document.visibilityState === 'visible' && quickLinksCache.shouldRefreshInBackground()) {
         quickLinksCache.markRefreshAttempt();
         updateQuickLinksCache();
       }
@@ -325,6 +325,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
   // 3. 添加后台更新缓存的函数
   async function updateQuickLinksCache() {
+    if (document.visibilityState !== 'visible') {
+      return;
+    }
+
     quickLinksCache.markRefreshAttempt();
     const fixedShortcuts = await getFixedShortcuts();
     const blacklist = await ensureSearchEngineDomainsBlacklisted();

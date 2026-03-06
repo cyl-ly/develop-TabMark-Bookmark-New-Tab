@@ -750,21 +750,32 @@ document.addEventListener('DOMContentLoaded', function() {
   });
 
   // 监听主题变化
-  const observer = new MutationObserver((mutations) => {
-    mutations.forEach((mutation) => {
-      if (mutation.attributeName === 'class') {
-        // 当背景类发生变化时，调整文字颜色
-        requestAnimationFrame(() => {
-          const welcomeElement = document.getElementById('welcome-message');
-          if (welcomeElement && window.WelcomeManager) {
-            window.WelcomeManager.adjustTextColor(welcomeElement);
-          }
-        });
+  let backgroundColorFrame = null;
+  let lastObservedBackgroundClass = document.documentElement.className;
+  const observer = new MutationObserver(() => {
+    if (document.visibilityState !== 'visible') {
+      return;
+    }
+
+    const nextBackgroundClass = document.documentElement.className;
+    if (nextBackgroundClass === lastObservedBackgroundClass) {
+      return;
+    }
+    lastObservedBackgroundClass = nextBackgroundClass;
+
+    if (backgroundColorFrame) {
+      cancelAnimationFrame(backgroundColorFrame);
+    }
+
+    backgroundColorFrame = requestAnimationFrame(() => {
+      backgroundColorFrame = null;
+      const welcomeElement = document.getElementById('welcome-message');
+      if (welcomeElement && window.WelcomeManager) {
+        window.WelcomeManager.adjustTextColor(welcomeElement);
       }
     });
   });
 
-  // 开始观察 documentElement 的 class 变化
   observer.observe(document.documentElement, {
     attributes: true,
     attributeFilter: ['class']
@@ -3865,17 +3876,6 @@ document.addEventListener('DOMContentLoaded', function () {
 // 保留原有的DOMContentLoaded事件监听器，但移除其中的背景应用逻辑
 document.addEventListener('DOMContentLoaded', function () {
 
-  // 在页面加载完成后立即检查 folder-name 元素
-  const folderNameElement = document.getElementById('folder-name');
-
-  // 设置一个 MutationObserver 来监视 folder-name 元素的变化
-  const observer = new MutationObserver((mutations) => {
-    mutations.forEach((mutation) => {
-    });
-  });
-
-  observer.observe(folderNameElement, { childList: true, subtree: true });
-
   function expandBookmarkTree(category) {
     let parent = category.parentElement;
     while (parent && parent.id !== 'categories-list') {
@@ -4676,6 +4676,13 @@ document.addEventListener('DOMContentLoaded', function () {
       chrome.storage.sync.get(['showHistorySuggestions', 'showBookmarkSuggestions'], resolve);
     }));
   }
+
+
+  chrome.storage.onChanged.addListener((changes, namespace) => {
+    if (namespace === 'sync' && (changes.showHistorySuggestions || changes.showBookmarkSuggestions)) {
+      suggestionSettingsCache.clear();
+    }
+  });
 
   async function getRecentHistory(limit = 100, maxPerDomain = 5) {
     const cacheKey = `${limit}:${maxPerDomain}`;
@@ -5818,8 +5825,9 @@ function initScrollIndicator() {
   const bookmarksList = document.getElementById('bookmarks-list');
   
   if (!bookmarksContainer || !bookmarksList) return;
+  if (bookmarksContainer.dataset.scrollIndicatorInitialized === 'true') return;
+  bookmarksContainer.dataset.scrollIndicatorInitialized = 'true';
   
-  // 创建滚动指示器
   const scrollIndicator = document.createElement('div');
   scrollIndicator.className = 'scroll-indicator';
   scrollIndicator.innerHTML = `
@@ -5830,21 +5838,23 @@ function initScrollIndicator() {
   `;
   bookmarksContainer.appendChild(scrollIndicator);
   
-  // 滚动状态变量
   let scrollTimeout;
   let isScrolling = false;
+  let animationTimeout;
   
-  // 检查是否需要滚动
   function checkScrollable() {
+    if (document.visibilityState !== 'visible') {
+      return;
+    }
+
     const isScrollable = bookmarksList.scrollHeight > bookmarksList.clientHeight;
     
     if (isScrollable) {
       scrollIndicator.style.display = 'flex';
-      // 添加动画类
       if (!scrollIndicator.classList.contains('animate')) {
         scrollIndicator.classList.add('animate');
-        // 5秒后移除动画
-        setTimeout(() => {
+        clearTimeout(animationTimeout);
+        animationTimeout = setTimeout(() => {
           scrollIndicator.classList.remove('animate');
         }, 5000);
       }
@@ -5852,6 +5862,8 @@ function initScrollIndicator() {
       scrollIndicator.style.display = 'none';
     }
   }
+
+  const scheduleCheckScrollable = _.debounce(checkScrollable, 200);
   
   // 监听滚动事件
   bookmarksList.addEventListener('scroll', () => {
@@ -5898,11 +5910,17 @@ function initScrollIndicator() {
   
   // 初始检查和窗口大小变化时重新检查
   checkScrollable();
-  window.addEventListener('resize', _.debounce(checkScrollable, 200));
+  window.addEventListener('resize', scheduleCheckScrollable);
   
   // 当书签列表内容变化时重新检查
-  const observer = new MutationObserver(_.debounce(checkScrollable, 200));
+  const observer = new MutationObserver(scheduleCheckScrollable);
   observer.observe(bookmarksList, { childList: true, subtree: true });
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      scheduleCheckScrollable();
+    }
+  });
   
   // 点击指示器滚动到下一屏
   scrollIndicator.addEventListener('click', () => {

@@ -6,9 +6,7 @@ import {
   setSearchEngineIcon,
   createSearchEngineDropdown, 
   initializeSearchEngineDialog,
-  getSearchUrl,
-  createTemporarySearchTabs,
-  getSearchEngineIconPath
+  createTemporarySearchTabs
 } from './search-engine-dropdown.js';
 
 let bookmarkTreeNodes = [];
@@ -1024,39 +1022,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
 
   
-  // 优化后的更新显示函数
-  async function updateBookmarksDisplay(parentId) {
-    const bookmarksContainer = document.querySelector('.bookmarks-container');
-    
-    // 添加加载状态
-    bookmarksContainer.classList.add('loading');
-    
-    try {
-      const cached = bookmarksCache.get(parentId);
-      
-      if (cached && !movedItemId) {
-        // 使用缓存数据进行分页显示
-        renderBookmarksPage(cached, 0);
-        return;
-      }
-
-      chrome.bookmarks.getChildren(parentId, (bookmarks) => {
-        if (chrome.runtime.lastError) {
-          throw chrome.runtime.lastError;
-        }
-        
-        // 缓存新数据
-        bookmarksCache.set(parentId, bookmarks);
-        
-        // 初始渲染第一页
-        renderBookmarksPage({ bookmarks, totalCount: bookmarks.length }, 0);
-      });
-    } finally {
-      // 移除加载状态
-      bookmarksContainer.classList.remove('loading');
-    }
-  }
-
   // 分页渲染函数
   function renderBookmarksPage(cachedData, pageIndex, pageSize = 100) {
     const startIndex = pageIndex * pageSize;
@@ -1091,25 +1056,6 @@ document.addEventListener('DOMContentLoaded', function () {
   function updatePagination(currentPage, totalPages) {
     // 实现分页控制UI
     // ...
-  }
-
-  // 化书顺序步
-  function syncBookmarkOrder(parentId) {
-    const cached = bookmarksCache.get(parentId);
-    if (!cached) return;
-    
-    chrome.bookmarks.getChildren(parentId, (bookmarks) => {
-      const chromeOrder = bookmarks.map(b => b.id);
-      const cachedOrder = cached.bookmarks.map(b => b.id);
-      
-      if (JSON.stringify(chromeOrder) !== JSON.stringify(cachedOrder)) {
-        // 更新缓存
-        bookmarksCache.set(parentId, bookmarks);
-        
-        // 重新渲染当前页
-        renderBookmarksPage({ bookmarks, totalCount: bookmarks.length }, 0);
-      }
-    });
   }
 
   // 修改右键菜单事件监听器
@@ -1552,39 +1498,30 @@ async function switchToFolder(folderId) {
 
 function updateBookmarksDisplay(parentId, movedItemId, newIndex) {
   return new Promise((resolve, reject) => {
-    // 首先检查缓存
     const cached = bookmarksCache.get(parentId);
     if (cached && !movedItemId) {
-      // 如果有缓存且不是移动操作，直接使用缓存数据
       console.log('Using cached bookmarks for:', parentId);
+      bookmarkOrderCache[parentId] = cached.bookmarks.map(bookmark => bookmark.id);
       displayBookmarks({ id: parentId, children: cached.bookmarks });
       resolve();
       return;
     }
 
-    // 如果没有缓存或是移动操作，从 Chrome API 获取数据
     chrome.bookmarks.getChildren(parentId, (bookmarks) => {
       if (chrome.runtime.lastError) {
         reject(chrome.runtime.lastError);
         return;
       }
 
-      const bookmarksList = document.getElementById('bookmarks-list');
-      const bookmarksContainer = document.querySelector('.bookmarks-container');
-
-      // 更新缓存
       bookmarksCache.set(parentId, bookmarks);
-
-      // 显示书签
+      bookmarkOrderCache[parentId] = bookmarks.map(bookmark => bookmark.id);
       displayBookmarks({ id: parentId, children: bookmarks });
 
       if (movedItemId) {
         highlightBookmark(movedItemId);
       }
 
-      // 更新文件夹名称
       updateFolderName(parentId);
-
       resolve();
     });
   });
@@ -4489,71 +4426,6 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   };
 
-  function updateBookmarksDisplay(parentId, movedItemId, newIndex) {
-    return new Promise((resolve, reject) => {
-      // 首先检查缓存
-      const cached = bookmarksCache.get(parentId);
-      if (cached && !movedItemId) {
-        // 如果有缓存且不是移动操作，直接使用缓存数据
-        console.log('Using cached bookmarks for:', parentId);
-        displayBookmarks({ id: parentId, children: cached.bookmarks });
-        resolve();
-        return;
-      }
-
-      // 如果没有缓存或是移动操作，从 Chrome API 获取数据
-      chrome.bookmarks.getChildren(parentId, (bookmarks) => {
-        if (chrome.runtime.lastError) {
-          reject(chrome.runtime.lastError);
-          return;
-        }
-
-        const bookmarksList = document.getElementById('bookmarks-list');
-        const bookmarksContainer = document.querySelector('.bookmarks-container');
-
-        // 先隐藏容器
-        bookmarksContainer.style.opacity = '0';
-        bookmarksContainer.style.transform = 'translateY(20px)';
-
-        // 更新缓存
-        bookmarksCache.set(parentId, bookmarks);
-
-        // 更新本地排序缓存
-        bookmarkOrderCache[parentId] = bookmarks.map(b => b.id);
-
-        // 清空现有书签
-        bookmarksList.innerHTML = '';
-
-        // 添加新的书签
-        bookmarks.forEach((bookmark, index) => {
-          const bookmarkElement = bookmark.url ? 
-            createBookmarkCard(bookmark, index) : 
-            createFolderCard(bookmark, index);
-          bookmarksList.appendChild(bookmarkElement);
-        });
-
-        bookmarksList.dataset.parentId = parentId;
-
-        if (movedItemId) {
-          highlightBookmark(movedItemId);
-        }
-
-        // 更新文件夹名称
-        updateFolderName(parentId);
-
-        // 使用 requestAnimationFrame 来确保 DOM 更新后再显示容器
-        requestAnimationFrame(() => {
-          requestAnimationFrame(() => {
-            bookmarksContainer.style.opacity = '1';
-            bookmarksContainer.style.transform = 'translateY(0)';
-          });
-        });
-
-        resolve();
-      });
-    });
-  }
-
   const tabsContainer = document.getElementById('tabs-container');
   const tabs = document.querySelectorAll('.tab');
   const defaultSearchEngine = localStorage.getItem('selectedSearchEngine') || 'Google';
@@ -4786,27 +4658,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
 
   // 修改 getSearchUrl 函数,使用 SearchEngineManager 中的配置
-  function getSearchUrl(engine, query) {
-    const allEngines = SearchEngineManager.getAllEngines();
-    const engineConfig = allEngines.find(e => {
-      // 匹配引擎名称或别名
-      return e.name.toLowerCase() === engine.toLowerCase() ||
-        (e.aliases && e.aliases.some(alias => alias.toLowerCase() === engine.toLowerCase()));
-    });
-
-    if (!engineConfig) {
-      // 如果找不到对应的引擎配置,使用默认引擎
-      const defaultEngine = SearchEngineManager.getDefaultEngine();
-      return defaultEngine.url + encodeURIComponent(query);
-    }
-
-    // 确保 URL 中包含查询参数占位符
-    const url = engineConfig.url.includes('%s') ? 
-      engineConfig.url.replace('%s', encodeURIComponent(query)) :
-      engineConfig.url + encodeURIComponent(query);
-
-    return url;
-  }
 
   // 动态调整 textarea 度的函数
   function adjustTextareaHeight() {
@@ -4829,14 +4680,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
   const searchSuggestions = document.getElementById('search-suggestions');
 
-  // 防抖函
-  function debounce(func, wait) {
-    let timeout;
-    return function (...args) {
-      clearTimeout(timeout);
-      timeout = setTimeout(() => func.apply(this, args), wait);
-    };
-  }
   async function getRecentHistory(limit = 100, maxPerDomain = 5) {
     return new Promise((resolve) => {
       chrome.history.search({ text: '', maxResults: limit * 20 }, (historyItems) => {
@@ -5117,92 +4960,6 @@ document.addEventListener('DOMContentLoaded', function () {
     return matrix[b.length][a.length];
   }
 
-  function updateSidebarDefaultBookmarkIndicator() {
-    const defaultBookmarkId = localStorage.getItem('defaultBookmarkId');
-    selectSidebarFolder(defaultBookmarkId);
-    
-    const allCategories = document.querySelectorAll('#categories-list li');
-    allCategories.forEach(category => {
-      const indicator = category.querySelector('.default-indicator');
-      if (indicator) {
-        indicator.remove();
-      }
-      if (category.dataset.id === defaultBookmarkId) {
-        const defaultIndicator = document.createElement('span');
-        defaultIndicator.className = 'default-indicator material-icons';
-        defaultIndicator.textContent = 'star';
-        defaultIndicator.title = getLocalizedMessage('homepage');
-        category.appendChild(defaultIndicator);
-      }
-    });
-  }
-
-  function updateBookmarksDisplay(parentId, movedItemId, newIndex) {
-    return new Promise((resolve, reject) => {
-      // 首先检查缓存
-      const cached = bookmarksCache.get(parentId);
-      if (cached && !movedItemId) {
-        // 如果有缓存且不是移动操作，直接使用缓存数据
-        console.log('Using cached bookmarks for:', parentId);
-        displayBookmarks({ id: parentId, children: cached.bookmarks });
-        resolve();
-        return;
-      }
-
-      // 如果没有缓存或是移动操作，从 Chrome API 获取数据
-      chrome.bookmarks.getChildren(parentId, (bookmarks) => {
-        if (chrome.runtime.lastError) {
-          reject(chrome.runtime.lastError);
-          return;
-        }
-
-        const bookmarksList = document.getElementById('bookmarks-list');
-        const bookmarksContainer = document.querySelector('.bookmarks-container');
-
-        // 先隐藏容器
-        bookmarksContainer.style.opacity = '0';
-        bookmarksContainer.style.transform = 'translateY(20px)';
-
-        // 更新缓存
-        bookmarksCache.set(parentId, bookmarks);
-
-        // 更新本地排序缓存
-        bookmarkOrderCache[parentId] = bookmarks.map(b => b.id);
-
-        // 清空现有书签
-        bookmarksList.innerHTML = '';
-
-        // 添加新的书签
-        bookmarks.forEach((bookmark, index) => {
-          const bookmarkElement = bookmark.url ? 
-            createBookmarkCard(bookmark, index) : 
-            createFolderCard(bookmark, index);
-          bookmarksList.appendChild(bookmarkElement);
-        });
-
-        bookmarksList.dataset.parentId = parentId;
-
-        if (movedItemId) {
-          highlightBookmark(movedItemId);
-        }
-
-        // 更新文件夹名称
-        updateFolderName(parentId);
-
-        // 使用 requestAnimationFrame 来确保 DOM 更新后再显示容器
-        requestAnimationFrame(() => {
-          requestAnimationFrame(() => {
-            bookmarksContainer.style.opacity = '1';
-            bookmarksContainer.style.transform = 'translateY(0)';
-          });
-        });
-
-        resolve();
-      });
-    });
-  }
-
-
 
   new Sortable(tabsContainer, {
     animation: 150,
@@ -5227,88 +4984,12 @@ document.addEventListener('DOMContentLoaded', function () {
 
 
 
-  function updateSubmitButtonState() {
-    if (searchInput.value.trim() === '') {
-      tabsContainer.style.display = 'none';
-    } else {
-      // 只有当搜索建议列表不为空时才显示 tabs-container
-      if (searchSuggestions.children.length > 0) {
-        tabsContainer.style.display = 'flex';
-      } else {
-        tabsContainer.style.display = 'none';
-      }
-    }
-  }
-
-
-
-  function debounce(func, wait) {
-    let timeout;
-    return function(...args) {
-      clearTimeout(timeout);
-      timeout = setTimeout(() => func.apply(this, args), wait);
-    };
-  }
-
-
-  function queueSearch() {
-    const query = searchInput.value.trim();
-    if (query === '') {
-      return;
-    }
-    searchQueue.push(query);
-    processSearchQueue();
-  }
-
-  function processSearchQueue() {
-    if (isSearching || searchQueue.length === 0) {
-      return;
-    }
-    
-    const query = searchQueue.shift();
-    debouncedPerformSearch(query);
-  }
-
   function setDefaultSearchEngine(engine) {
     console.log('[Settings] Setting new default engine:', engine);
     defaultSearchEngine = engine;
     localStorage.setItem('selectedSearchEngine', engine);
   }
 
-  // 修改 getSearchUrl 函数,使用 SearchEngineManager 中的配置
-  function getSearchUrl(engine, query) {
-    const allEngines = SearchEngineManager.getAllEngines();
-    const engineConfig = allEngines.find(e => {
-      // 匹配引擎名称或别名
-      return e.name.toLowerCase() === engine.toLowerCase() ||
-        (e.aliases && e.aliases.some(alias => alias.toLowerCase() === engine.toLowerCase()));
-    });
-
-    if (!engineConfig) {
-      // 如果找不到对应的引擎配置,使用默认引擎
-      const defaultEngine = SearchEngineManager.getDefaultEngine();
-      return defaultEngine.url + encodeURIComponent(query);
-    }
-
-    // 确保 URL 中包含查询参数占位符
-    const url = engineConfig.url.includes('%s') ? 
-      engineConfig.url.replace('%s', encodeURIComponent(query)) :
-      engineConfig.url + encodeURIComponent(query);
-
-    return url;
-  }
-
-
-
-  // 防抖函
-  function debounce(func, wait) {
-    let timeout;
-    return function (...args) {
-      clearTimeout(timeout);
-      timeout = setTimeout(() => func.apply(this, args), wait);
-    };
-  }
-  // 添加这个函数定义
   async function getBingSuggestions(query) {
     try {
       const response = await fetch(`https://api.bing.com/osjson.aspx?query=${encodeURIComponent(query)}`);
@@ -5324,272 +5005,6 @@ document.addEventListener('DOMContentLoaded', function () {
     } catch (error) {
       return []; // 返回空数组，以便在出错时程序可以继续运行
     }
-  }
-  async function getRecentHistory(limit = 100, maxPerDomain = 5) {
-    return new Promise((resolve) => {
-      chrome.history.search({ text: '', maxResults: limit * 20 }, (historyItems) => {
-        const now = Date.now();
-        const domainCounts = {};
-        const uniqueItems = new Map();
-
-        const recentHistory = historyItems
-          // 映射并添加额外信息
-          .map(item => {
-            const url = new URL(item.url);
-            const domain = url.hostname;
-            return {
-              text: item.title,
-              url: item.url,
-              domain: domain,
-              type: 'history',
-              relevance: 1,
-              timestamp: item.lastVisitTime
-            };
-          })
-          // 按时间排序（最近的优先）
-          .sort((a, b) => b.timestamp - a.timestamp)
-          // 去重（基于URL和标题）并限制每个域名的数量
-          .filter(item => {
-            const key = `${item.url}|${item.text}`;
-            if (uniqueItems.has(key)) return false;
-            
-            domainCounts[item.domain] = (domainCounts[item.domain] || 0) + 1;
-            if (domainCounts[item.domain] > maxPerDomain) return false;
-            
-            uniqueItems.set(key, item);
-            return true;
-          })
-          // 应用时间衰减因子
-          .map(item => {
-            const daysSinceLastVisit = (now - item.timestamp) / (1000 * 60 * 60 * 24);
-            item.relevance *= Math.exp(-daysSinceLastVisit / RELEVANCE_CONFIG.timeDecayHalfLife);
-            return item;
-          })
-          // 再次排序，这次基于相关性（考虑了时间衰减）
-          .sort((a, b) => b.relevance - a.relevance)
-          // 限制结果数量
-          .slice(0, limit);
-
-        resolve(recentHistory);
-      });
-    });
-  }
-
-  function searchHistory(query, maxResults = 200) {
-    return new Promise((resolve) => {
-      const startTime = new Date().getTime() - (30 * 24 * 60 * 60 * 1000); // 搜索最近30天的历史
-      chrome.history.search(
-        { 
-          text: query, 
-          startTime: startTime,
-          maxResults: maxResults 
-        }, 
-        (results) => {
-          
-          // 对历史记录进行去重
-          const uniqueResults = Array.from(new Set(results.map(r => r.url)))
-            .map(url => results.find(r => r.url === url));
-          resolve(uniqueResults);
-        }
-      );
-    });
-  }
-  // 获取搜索建议
-  async function getSuggestions(query) {
-    const maxHistoryResults = 200;
-    const maxBookmarkResults = 50;
-    const maxTotalSuggestions = 50;
-
-    let suggestions = [{ text: query, type: 'search', relevance: Infinity }];
-
-    // 获取设置
-    const settings = await new Promise(resolve => {
-      chrome.storage.sync.get(
-        ['showHistorySuggestions', 'showBookmarkSuggestions'],
-        resolve
-      );
-    });
-
-    // 根据设置获取历史记录建议
-    let historySuggestions = [];
-    if (settings.showHistorySuggestions !== false) {
-      const historyItems = await searchHistory(query, maxHistoryResults);
-      historySuggestions = historyItems.map(item => ({
-        text: item.title,
-        url: item.url,
-        type: 'history',
-        relevance: calculateRelevance(query, item.title, item.url),
-        timestamp: item.lastVisitTime
-      }));
-    }
-
-    // 根据设置获取书签建议
-    let bookmarkSuggestions = [];
-    if (settings.showBookmarkSuggestions !== false) {
-      const bookmarkItems = await new Promise(resolve => {
-        chrome.bookmarks.search(query, resolve);
-      });
-      bookmarkSuggestions = bookmarkItems.slice(0, maxBookmarkResults).map(item => ({
-        text: item.title,
-        url: item.url,
-        type: 'bookmark',
-        relevance: calculateRelevance(query, item.title, item.url) * RELEVANCE_CONFIG.bookmarkRelevanceBoost
-      }));
-    }
-
-    // 合并所有建议
-    suggestions.push(
-      ...historySuggestions,
-      ...bookmarkSuggestions
-    );
-
-    // 对结果进行排序和去重
-    const uniqueSuggestions = Array.from(new Set(suggestions.map(s => s.url)))
-      .map(url => suggestions.find(s => s.url === url))
-      .sort((a, b) => b.relevance - a.relevance);
-
-    // 平衡和交替显示结果
-    const balancedResults = await balanceResults(uniqueSuggestions, maxTotalSuggestions);
-
-    return balancedResults;
-  }
-
-  function calculateRelevance(query, title, url) {
-    // 基础设置
-    const weights = {
-      exactTitleMatch: 100,    // 标题完全匹配权重
-      exactUrlMatch: 80,       // URL完全匹配权重
-      titleStartsWith: 70,     // 标题开头匹配权重
-      urlStartsWith: 60,       // URL开头匹配权重
-      titleIncludes: 50,       // 标题包含匹配权重
-      urlIncludes: 40,         // URL包含匹配权重
-      wordMatch: 30,           // 分词匹配权重
-      fuzzyMatch: 20           // 模糊匹配权重
-    };
-
-    // 数据预处理
-    const lowerQuery = query.toLowerCase().trim();
-    const lowerTitle = (title || '').toLowerCase().trim();
-    const lowerUrl = (url || '').toLowerCase().trim();
-    const queryWords = lowerQuery.split(/\s+/);  // 将查询分词
-
-    let score = 0;
-
-    // 1. 完全匹配检查
-    if (lowerTitle === lowerQuery) {
-      score += weights.exactTitleMatch;
-    }
-    if (lowerUrl === lowerQuery) {
-      score += weights.exactUrlMatch;
-    }
-
-    // 2. 开头匹配检查
-    if (lowerTitle.startsWith(lowerQuery)) {
-      score += weights.titleStartsWith;
-    }
-    if (lowerUrl.startsWith(lowerQuery)) {
-      score += weights.urlStartsWith;
-    }
-
-    // 3. 包含匹配检查
-    if (lowerTitle.includes(lowerQuery)) {
-      score += weights.titleIncludes;
-    }
-    if (lowerUrl.includes(lowerQuery)) {
-      score += weights.urlIncludes;
-    }
-
-    // 4. 分词匹配
-    queryWords.forEach(word => {
-      if (word.length > 1) {  // 忽略单字符词
-        if (lowerTitle.includes(word)) {
-          score += weights.wordMatch;
-        }
-        if (lowerUrl.includes(word)) {
-          score += weights.wordMatch / 2;  // URL分词匹配权重较低
-        }
-      }
-    });
-
-    // 5. 模糊匹配（编辑距离）
-    if (title) {
-      const fuzzyScore = calculateFuzzyMatch(lowerQuery, lowerTitle);
-      if (fuzzyScore > 0.8) {  // 相似度阈值
-        score += weights.fuzzyMatch * fuzzyScore;
-      }
-    }
-
-    // 6. 长度惩罚因子（避免过长的结果）
-    const lengthPenalty = Math.max(1, Math.log(lowerTitle.length / lowerQuery.length));
-    score = score / lengthPenalty;
-
-    // 7. 添加时间衰减因子（如果有时间戳）
-    if (title && title.timestamp) {
-      const daysOld = (Date.now() - title.timestamp) / (1000 * 60 * 60 * 24);
-      const timeDecay = Math.exp(-daysOld / 30);  // 30天的半衰期
-      score *= timeDecay;
-    }
-
-    return Math.round(score * 100) / 100;  // 保留两位小数
-  }
-
-  // 计算模糊匹配分数
-  function calculateFuzzyMatch(query, text) {
-    if (query.length === 0 || text.length === 0) return 0;
-    if (query === text) return 1;
-
-    const maxLength = Math.max(query.length, text.length);
-    const distance = levenshteinDistance(query, text);
-    return (maxLength - distance) / maxLength;
-  }
-
-  // Levenshtein 距离计算
-  function levenshteinDistance(a, b) {
-    const matrix = Array(b.length + 1).fill().map(() => Array(a.length + 1).fill(0));
-
-    for (let i = 0; i <= a.length; i++) matrix[0][i] = i;
-    for (let j = 0; j <= b.length; j++) matrix[j][0] = j;
-
-    for (let i = 1; i <= b.length; i++) {
-      for (let j = 1; j <= a.length; j++) {
-        const substitutionCost = a[i - 1] === b[j - 1] ? 0 : 1;
-        matrix[j][i] = Math.min(
-          matrix[j][i - 1] + 1,                   // 删除
-          matrix[j - 1][i] + 1,                   // 插入
-          matrix[j - 1][i - 1] + substitutionCost // 替换
-        );
-      }
-    }
-    return matrix[b.length][a.length];
-  }
-
-  // Levenshtein 距离函数（如果之前没有定义的话）
-  function levenshteinDistance(a, b) {
-    const matrix = [];
-
-    for (let i = 0; i <= b.length; i++) {
-      matrix[i] = [i];
-    }
-
-    for (let j = 0; j <= a.length; j++) {
-      matrix[0][j] = j;
-    }
-
-    for (let i = 1; i <= b.length; i++) {
-      for (let j = 1; j <= a.length; j++) {
-        if (b.charAt(i - 1) === a.charAt(j - 1)) {
-          matrix[i][j] = matrix[i - 1][j - 1];
-        } else {
-          matrix[i][j] = Math.min(
-            matrix[i - 1][j - 1] + 1,
-            matrix[i][j - 1] + 1,
-            matrix[i - 1][j] + 1
-          );
-        }
-      }
-    }
-
-    return matrix[b.length][a.length];
   }
 
   async function balanceResults(suggestions, maxResults) {
@@ -5922,42 +5337,6 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   }
 
-
-  // Add this function to fetch favicons
-  function getFavicon(url, callback) {
-    const faviconURL = `chrome-extension://${chrome.runtime.id}/_favicon/?pageUrl=${encodeURIComponent(url)}&size=32`;
-    const img = new Image();
-    img.onload = function () {
-      callback(faviconURL);
-    };
-    img.onerror = function () {
-      callback(''); // Return an empty string if favicon is not found
-    };
-    img.src = faviconURL;
-  }
-
-  // Add this function to fetch favicon online as a fallback
-  function fetchFaviconOnline(url, callback) {
-    const domain = new URL(url).hostname;
-    const faviconUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
-    const img = new Image();
-    img.onload = function () {
-      cacheFavicon(domain, faviconUrl);
-      callback(faviconUrl);
-    };
-    img.onerror = function () {
-      callback('');
-    };
-    img.src = faviconUrl;
-  }
-
-  // Add this function to cache favicons
-  function cacheFavicon(domain, faviconUrl) {
-    const data = {};
-    data[domain] = faviconUrl;
-    chrome.storage.local.set(data);
-  }
-
   async function showDefaultSuggestions() {
     // 首先检查设置
     const settings = await new Promise(resolve => {
@@ -6105,18 +5484,6 @@ document.addEventListener('DOMContentLoaded', function () {
   })
 
   // 添加防抖函数
-  function debounce(func, wait) {
-    let timeout;
-    return function executedFunction(...args) {
-      const later = () => {
-        clearTimeout(timeout);
-        func(...args);
-      };
-      clearTimeout(timeout);
-      timeout = setTimeout(later, wait);
-    };
-  }
-
 
 
   function hideSuggestions() {
@@ -6193,19 +5560,12 @@ document.addEventListener('DOMContentLoaded', function () {
 
 
 
-// 确保在 DOMContentLoaded 时调用创建函数
-document.addEventListener('DOMContentLoaded', function() {
-  createSearchEngineDropdown();
-  // ... 其他初始化代码 ...
-});
 
 
 
 
 
 
-  // 在适当时机调用此函数
-  document.addEventListener('DOMContentLoaded', setVersionNumber);
 
   // 修改文档点击事件监听器，同时处理书签和文件夹的上下文菜单
   document.addEventListener('click', function (event) {
@@ -6602,14 +5962,3 @@ function initScrollIndicator() {
   // 初始检查和窗口大小变化时重新检查
 }
 
-// 在DOMContentLoaded事件中调用
-document.addEventListener('DOMContentLoaded', function() {
-  // 初始化虚拟滚动
-  initVirtualScroll();
-  
-  // 初始化滚动指示器
-  initScrollIndicator();
-  
-  // 其他初始化代码...
-  startPeriodicSync();
-});

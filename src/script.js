@@ -25,6 +25,9 @@ import { ICONS } from './icons.js';
 
 const IS_SIDEPANEL_PAGE = window.location.pathname.endsWith('sidepanel.html');
 const BOOKMARK_FILTER_ALL_ID = '__all__';
+const BOOKMARK_FILTER_ORDER_STORAGE_KEY = 'bookmarkFilterOrders';
+let bookmarkFilterSortable = null;
+const bookmarkFilterOrderCache = new Map();
 
 const bookmarkFilterState = {
   rootParentId: null,
@@ -1759,6 +1762,101 @@ function updateBookmarkFilterTabSelection() {
   });
 }
 
+
+function applyBookmarkFilterOrder(folders, orderedIds = []) {
+  const folderMap = new Map(folders.map(folder => [folder.id, folder]));
+  const orderedFolders = [];
+
+  orderedIds.forEach(folderId => {
+    const folder = folderMap.get(folderId);
+    if (folder) {
+      orderedFolders.push(folder);
+      folderMap.delete(folderId);
+    }
+  });
+
+  folders.forEach(folder => {
+    if (folderMap.has(folder.id)) {
+      orderedFolders.push(folder);
+      folderMap.delete(folder.id);
+    }
+  });
+
+  return orderedFolders;
+}
+
+async function getBookmarkFilterOrder(rootParentId) {
+  if (!rootParentId) {
+    return [];
+  }
+
+  if (bookmarkFilterOrderCache.has(rootParentId)) {
+    return bookmarkFilterOrderCache.get(rootParentId);
+  }
+
+  const result = await chrome.storage.sync.get(BOOKMARK_FILTER_ORDER_STORAGE_KEY);
+  const allOrders = result[BOOKMARK_FILTER_ORDER_STORAGE_KEY] || {};
+  const storedOrder = allOrders[rootParentId] || [];
+  bookmarkFilterOrderCache.set(rootParentId, storedOrder);
+  return storedOrder;
+}
+
+async function saveBookmarkFilterOrder(rootParentId, orderedIds) {
+  if (!rootParentId) {
+    return;
+  }
+
+  const result = await chrome.storage.sync.get(BOOKMARK_FILTER_ORDER_STORAGE_KEY);
+  const allOrders = result[BOOKMARK_FILTER_ORDER_STORAGE_KEY] || {};
+  allOrders[rootParentId] = orderedIds;
+  bookmarkFilterOrderCache.set(rootParentId, orderedIds);
+  await chrome.storage.sync.set({ [BOOKMARK_FILTER_ORDER_STORAGE_KEY]: allOrders });
+}
+
+function initializeBookmarkFilterSortable(filterBar) {
+  if (!isMainPageBookmarkFilterEnabled() || typeof Sortable === 'undefined' || !filterBar) {
+    return;
+  }
+
+  if (bookmarkFilterSortable) {
+    bookmarkFilterSortable.destroy();
+    bookmarkFilterSortable = null;
+  }
+
+  const draggableTags = filterBar.querySelectorAll('.bookmark-folder-filter-tag:not([data-filter-id="__all__"])');
+  if (draggableTags.length <= 1) {
+    return;
+  }
+
+  bookmarkFilterSortable = new Sortable(filterBar, {
+    animation: 150,
+    draggable: '.bookmark-folder-filter-tag:not([data-filter-id="__all__"])',
+    onEnd: async () => {
+      const orderedIds = Array.from(
+        filterBar.querySelectorAll('.bookmark-folder-filter-tag:not([data-filter-id="__all__"])')
+      )
+        .map(tag => tag.dataset.filterId)
+        .filter(Boolean);
+
+      bookmarkFilterState.childFolders = applyBookmarkFilterOrder(bookmarkFilterState.childFolders, orderedIds);
+      await saveBookmarkFilterOrder(bookmarkFilterState.rootParentId, orderedIds);
+      renderBookmarkFilterTabs();
+    }
+  });
+}
+
+async function syncBookmarkFilterOrderFromStorage() {
+  const rootParentId = bookmarkFilterState.rootParentId;
+  const storedOrder = await getBookmarkFilterOrder(rootParentId);
+
+  if (bookmarkFilterState.rootParentId !== rootParentId || storedOrder.length === 0) {
+    return;
+  }
+
+  bookmarkFilterState.childFolders = applyBookmarkFilterOrder(bookmarkFilterState.childFolders, storedOrder);
+  renderBookmarkFilterTabs();
+}
+
 function renderBookmarkItems(items, parentId, { showFolders = true } = {}) {
   const bookmarksList = document.getElementById('bookmarks-list');
   const bookmarksContainer = document.querySelector('.bookmarks-container');
@@ -1896,6 +1994,7 @@ function renderBookmarkFilterTabs() {
   });
 
   updateBookmarkFilterTabSelection();
+  initializeBookmarkFilterSortable(filterBar);
 }
 
 function initializeMainPageBookmarkFilters(bookmark) {
@@ -1909,6 +2008,7 @@ function initializeMainPageBookmarkFilters(bookmark) {
 
   renderBookmarkFilterTabs();
   renderBookmarkItems(sortedItems, bookmark.id, { showFolders: false });
+  void syncBookmarkFilterOrderFromStorage();
 }
 
 function translateFilteredDropIndex(bookmarksList, movedItemId, fallbackIndex) {

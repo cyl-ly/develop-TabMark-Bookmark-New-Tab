@@ -2456,3 +2456,20 @@ body .default-folders-tabs.sidebar-expanded {
   box-shadow: 0 10px 22px rgba(15, 23, 42, 0.12);
   transform: scale(1.04);
 }
+
+
+.bookmark-folder-filter-tag:not([data-filter-id="__all__"]) {
+  cursor: grab;
+}
+
+.bookmark-folder-filter-tag:not([data-filter-id="__all__"]):active {
+  cursor: grabbing;
+}
+
+.bookmark-folder-filter-tag.sortable-ghost {
+  opacity: 0.35;
+}
+
+.bookmark-folder-filter-tag.sortable-chosen {
+  box-shadow: 0 12px 26px rgba(15, 23, 42, 0.12);
+}

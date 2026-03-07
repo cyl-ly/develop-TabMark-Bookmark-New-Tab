@@ -1,6 +1,6 @@
 {
     "extName": {
-        "message": "新标签页",
+        "message": "TabMark2",
         "description": "扩展的名称"
     },
     "extDescription": {
@@ -349,11 +349,11 @@
         "description": "关于选项卡"
     },
     "aboutTitle": {
-        "message": "关于 TabMark",
+        "message": "关于 TabMark2",
         "description": "关于 TabMark 的标题"
     },
     "aboutDescription": {
-        "message": "TabMark 是一个简洁、高效的书签管理扩展，帮助您更好地组织和访问您的网络收藏。",
+        "message": "TabMark2 是基于原项目继续维护和增强的二次开发版本。",
         "description": "关于 TabMark 的描述"
     },
     "sourceCode": {
@@ -908,5 +908,29 @@
     "addQuickLinkShort": {
         "message": "添加",
         "description": "Short label for homepage quick link add entry"
+    },
+    "sidebarSearchPlaceholder": {
+        "message": "搜索书签和文件夹",
+        "description": "sidebarSearchPlaceholder"
+    },
+    "sidebarSearchEmpty": {
+        "message": "未找到匹配的书签或文件夹",
+        "description": "sidebarSearchEmpty"
+    },
+    "sidebarSearchFolderType": {
+        "message": "文件夹",
+        "description": "sidebarSearchFolderType"
+    },
+    "sidebarSearchBookmarkType": {
+        "message": "书签",
+        "description": "sidebarSearchBookmarkType"
+    },
+    "untitledBookmark": {
+        "message": "未命名",
+        "description": "untitledBookmark"
+    },
+    "sidebarSearchAliasLabel": {
+        "message": "别名",
+        "description": "sidebarSearchAliasLabel"
     }
 }

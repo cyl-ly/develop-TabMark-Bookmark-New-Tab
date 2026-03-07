@@ -88,9 +88,13 @@
     <aside class="custom-width p-4 overflow-auto border-r border-gray-200 relative">
       <div id="sidebar-logo" class="mb-4">
         <img src="../images/logo.svg" alt="Logo" id="logo-image">
-        <h1 id="logo-title">TabMark</h1>
+        <h1 id="logo-title">TabMark2</h1>
       </div>
-      <ul id="categories-list" class="space-y-2"></ul>
+      <div id="sidebar-search" class="sidebar-search">
+        <input id="sidebar-search-input" class="sidebar-search-input" type="search" autocomplete="off">
+        <div id="sidebar-search-results" class="sidebar-search-results" hidden></div>
+      </div>
+      <ul id="categories-list" class="space-y-2" hidden></ul>
     </aside>
     <main class="flex-1 bg-gray-50 p-8 overflow-auto flex flex-col">
       <div class="welcome-search-container">
@@ -247,11 +251,10 @@
           <button class="settings-tab-button" data-tab="layout" data-i18n="layoutTab">布局设置</button>
           <button class="settings-tab-button" data-tab="search" data-i18n="searchTab">搜索设置</button>
           <button class="settings-tab-button" data-tab="floating-ball" data-i18n="floatingBallTab">悬浮球设置</button>
-          <button class="settings-tab-button" data-tab="quick-links" data-i18n="quickLinksTab">网站推荐</button>
+          <button class="settings-tab-button" data-tab="quick-links" data-i18n="quickLinksTab">快捷标签</button>
           <button class="settings-tab-button" data-tab="link-opening" data-i18n="linkOpeningTab">链接打开方式</button>
           <button class="settings-tab-button" data-tab="bookmark-management"
             data-i18n="bookmarkManagementTab">书签管理</button>
-          <button class="settings-tab-button" data-tab="wheel-switching" data-i18n="wheelSwitchingTab">滚轮切换</button>
           <button class="settings-tab-button" data-tab="shortcuts" data-i18n="shortcutsTab">快捷键</button>
           <button class="settings-tab-button" data-tab="about" data-i18n="aboutTab">关于</button>
         </div>
@@ -449,7 +452,7 @@
             </div>
           </div>
           <div id="quick-links-settings" class="settings-tab-content">
-            <h3 class="settings-modal-subtitle" data-i18n="quickLinksSettings">Quick Links Settings</h3>
+            <h3 class="settings-modal-subtitle" data-i18n="quickLinksSettings">快捷标签设置</h3>
             <p data-i18n="quickLinksDescription">开启快捷链接后，将在搜索框下方显示您最常访问的网站，方便快速访问。访问新的网站时会自动更新快捷链接列表。</p>
             <div class="setting-option">
               <label for="enable-quick-links" class="switch-label" data-i18n="enableQuickLinks">启用快捷链接</label>
@@ -500,17 +503,6 @@
               </button>
             </div>
           </div>
-          <div id="wheel-switching-settings" class="settings-tab-content">
-            <h3 class="settings-modal-subtitle" data-i18n="wheelSwitchingSettingsTitle">滚轮切换设置</h3>
-            <p data-i18n="wheelSwitchingDescription">配置默认文件夹的滚轮切换功能</p>
-            <div class="setting-option">
-              <label for="enable-wheel-switching" class="switch-label" data-i18n="enableWheelSwitching">启用滚轮切换</label>
-              <label class="switch">
-                <input type="checkbox" id="enable-wheel-switching">
-                <span class="slider round"></span>
-              </label>
-            </div>
-          </div>
           <div id="shortcuts-settings" class="settings-tab-content">
             <h3 class="settings-modal-subtitle" data-i18n="shortcutsSettingsTitle">快捷键设置</h3>
             <p data-i18n="shortcutsSettingsDescription" class="settings-description">自定义快捷键设置</p>
@@ -529,12 +521,12 @@
             </div>
           </div>
           <div id="about-settings" class="settings-tab-content">
-            <h3 class="settings-modal-subtitle" data-i18n="aboutTitle">关于 TabMark</h3>
+            <h3 class="settings-modal-subtitle" data-i18n="aboutTitle">关于 TabMark2</h3>
             <div class="about-content secondary-about-content">
-              <img src="../images/logo.svg" alt="TabMark Logo" class="about-logo">
+              <img src="../images/logo.svg" alt="TabMark2 Logo" class="about-logo">
               <p class="about-version"></p>
               <p class="about-description secondary-about-description">
-                当前版本为基于原项目进行维护和增强的二次开发版本，保留原项目链接以便追溯来源与致谢。
+                当前版本为基于原项目进行维护和增强的二次开发版本，产品名称调整为 TabMark2，并保留原项目仓库链接以便追溯来源与致谢。
               </p>
               <div class="about-links secondary-about-links">
                 <a href="https://github.com/Alanrk/TabMark-Bookmark-New-Tab" target="_blank" class="about-link">
@@ -543,12 +535,14 @@
                 </a>
               </div>
               <div class="about-changelog">
-                <h4 class="about-changelog-title">二开功能日志</h4>
+                <h4 class="about-changelog-title">TabMark2 二开功能日志</h4>
                 <ul class="about-changelog-list">
                   <li>主页二级文件夹改为顶部标签，并支持拖拽排序</li>
                   <li>中间快捷标签改为纯固定模式，支持主页直接添加与拖拽排序</li>
                   <li>优化快捷标签入口 UI 与数量上限交互</li>
                   <li>完成一轮代码清理、重复逻辑合并与性能优化</li>
+                  <li>左侧边栏重构为搜索优先模式，支持全局检索书签与文件夹</li>
+                  <li>左侧搜索支持双语别名匹配、键盘上下选择与鼠标滚轮滚动</li>
                 </ul>
               </div>
             </div>

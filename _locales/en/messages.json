@@ -1,6 +1,6 @@
 {
     "extName": {
-        "message": "New Tab",
+        "message": "TabMark2",
         "description": "The name of the extension"
     },
     "extDescription": {
@@ -324,11 +324,11 @@
         "description": "About tab"
     },
     "aboutTitle": {
-        "message": "About TabMark",
+        "message": "About TabMark2",
         "description": "Title for About TabMark"
     },
     "aboutDescription": {
-        "message": "TabMark is a clean and efficient bookmark management extension that helps you better organize and access your web collections.",
+        "message": "TabMark2 is a secondary development version built on top of the original project and continuously enhanced.",
         "description": "Description for About TabMark"
     },
     "sourceCode": {
@@ -893,5 +893,29 @@
     "addQuickLinkShort": {
         "message": "Add",
         "description": "Short label for homepage quick link add entry"
+    },
+    "sidebarSearchPlaceholder": {
+        "message": "Search bookmarks and folders",
+        "description": "sidebarSearchPlaceholder"
+    },
+    "sidebarSearchEmpty": {
+        "message": "No matching bookmarks or folders found",
+        "description": "sidebarSearchEmpty"
+    },
+    "sidebarSearchFolderType": {
+        "message": "Folder",
+        "description": "sidebarSearchFolderType"
+    },
+    "sidebarSearchBookmarkType": {
+        "message": "Bookmark",
+        "description": "sidebarSearchBookmarkType"
+    },
+    "untitledBookmark": {
+        "message": "Untitled",
+        "description": "untitledBookmark"
+    },
+    "sidebarSearchAliasLabel": {
+        "message": "Alias",
+        "description": "sidebarSearchAliasLabel"
     }
 }

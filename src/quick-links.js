@@ -248,16 +248,6 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
-  function openQuickLinksSettings() {
-    if (settingsManager) {
-      settingsManager.openSettingsSidebar();
-      settingsManager.switchTab('quick-links');
-      return;
-    }
-
-    document.querySelector('.settings-icon a')?.click();
-    document.querySelector('[data-tab="quick-links"]')?.click();
-  }
 
   function openQuickLinkDialog(site = null) {
     const editDialog = document.getElementById('edit-dialog');
@@ -954,25 +944,5 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   });
 
-  // 添加返回按钮相关函数
-  function showBackButton() {
-    let backButton = document.querySelector('.back-to-links');
-    if (!backButton) {
-      backButton = document.createElement('button');
-      backButton.className = 'back-to-links';
-      backButton.innerHTML = '<span class="material-icons">arrow_back</span>';
-      backButton.title = '返回快捷链接';
-      document.querySelector('main').appendChild(backButton);
-      
-      backButton.addEventListener('click', () => {
-        const iframe = document.querySelector('.quick-link-iframe');
-        if (iframe) {
-          iframe.style.display = 'none';
-        }
-        document.querySelector('.quick-links-wrapper').style.display = 'flex';
-        backButton.style.display = 'none';
-      });
-    }
-    backButton.style.display = 'block';
-  }
+
 });

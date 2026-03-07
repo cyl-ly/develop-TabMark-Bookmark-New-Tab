@@ -196,7 +196,6 @@
           <button class="settings-tab-button" data-tab="bookmark-management" data-i18n="bookmarkManagementTab">书签管理</button>
           <button class="settings-tab-button" data-tab="wheel-switching" data-i18n="wheelSwitchingTab">滚轮切换</button>
           <button class="settings-tab-button" data-tab="shortcuts" data-i18n="shortcutsTab">快捷键</button>
-          <button class="settings-tab-button" data-tab="donate" data-i18n="donateTab">支持我们</button>
           <button class="settings-tab-button" data-tab="about" data-i18n="aboutTab">关于</button>
         </div>
         <div class="settings-content">
@@ -484,63 +483,31 @@
                </div>
              </div>
            </div>
-           <div id="donate-settings" class="settings-tab-content">
-             <h3 class="settings-modal-subtitle" data-i18n="donateTitle">支持 TabMark 开发</h3>
-             <p class="donate-description" data-i18n="donateDescription">如果您觉得 TabMark 有用，请考虑支持它的持续开发。您的贡献将帮助我们改进扩展并添加新功能。</p>
-             
-             <div class="donate-options">
-               <!-- 微信赞赏码 -->
-               <div class="donate-option">
-                 <h4 class="donate-option-title" data-i18n="wechatDonateTitle">微信支付</h4>
-                 <div class="donate-qrcode-container">
-                   <img src="../images/wechat-donate.png" alt="WeChat Donate QR Code" class="donate-qrcode">
-                   <p class="donate-qrcode-text" data-i18n="scanQRCodeToDonate">扫描二维码赞赏</p>
-                 </div>
-               </div>
-             </div>
-             
-             <!-- 赞赏列表链接 - 独立区域 -->
-             <div class="donate-list-container">
-               <a href="https://cooing-loganberry-b74.notion.site/Tabmark-1af1ee1c3b3a80d7b268fda1c74f0404" target="_blank" class="donate-list-button">
-                 <span data-i18n="donateListLink">查看赞赏列表</span>
-               </a>
-             </div>
-             
-             <p class="donate-thank-you" data-i18n="thankYouForSupport">感谢您的支持！</p>
-           </div>
            <div id="about-settings" class="settings-tab-content">
-             <h3 class="settings-modal-subtitle" data-i18n="aboutTitle">关于 TabMark</h3>
-             <div class="about-content">
-               <img src="../images/logo.svg" alt="TabMark Logo" class="about-logo">
-               <p class="about-version"></p>
-               <p class="about-description" data-i18n="aboutDescription">
-                 TabMark 是一个简洁、高效的书签管理扩展，帮助您更好地组织和访问您的网络收藏。
-               </p>
-               <div class="about-links">
-                 <a href="https://github.com/Alanrk/TabMark-Bookmark-New-Tab" target="_blank" class="about-link">
-                   <span class="material-icons">code</span>
-                   <span data-i18n="sourceCode">源代码</span>
-                 </a>
-                  <a href="https://x.com/thesowhale" class="about-link" target="_blank">
-                    <img src="../images/twitter-logo.png" alt="Twitter" class="twitter-icon">
-                    <span>Twitter</span>
-                  </a>
-                  <a href="mailto:hello@ainewtab.app" class="about-link" target="_blank">
-                    <span class="material-icons">feedback</span>
-                    <span data-i18n="feedback">邮箱</span>
-                  </a>
-                  <a href="https://cooing-loganberry-b74.notion.site/Tabmark-59054bd6e444458986d1fc61a383e095" class="about-link" target="_blank">
-                    <span class="material-icons">feedback</span>
-                    <span data-i18n="feedbacks">反馈建议</span>
-                  </a>
-                  <p class="official-website">
-                    <a href="https://www.ainewtab.app" target="_blank">
-                      <span data-i18n="officialWebsite">Official Website</span>: https://www.ainewtab.app
-                    </a>
-                  </p>
-               </div>
-             </div>
-           </div>
+            <h3 class="settings-modal-subtitle" data-i18n="aboutTitle">关于 TabMark</h3>
+            <div class="about-content secondary-about-content">
+              <img src="../images/logo.svg" alt="TabMark Logo" class="about-logo">
+              <p class="about-version"></p>
+              <p class="about-description secondary-about-description">
+                当前版本为基于原项目进行维护和增强的二次开发版本，保留原项目链接以便追溯来源与致谢。
+              </p>
+              <div class="about-links secondary-about-links">
+                <a href="https://github.com/Alanrk/TabMark-Bookmark-New-Tab" target="_blank" class="about-link">
+                  <span class="material-icons">code</span>
+                  <span>原仓库链接</span>
+                </a>
+              </div>
+              <div class="about-changelog">
+                <h4 class="about-changelog-title">二开功能日志</h4>
+                <ul class="about-changelog-list">
+                  <li>主页二级文件夹改为顶部标签，并支持拖拽排序</li>
+                  <li>中间快捷标签改为纯固定模式，支持主页直接添加与拖拽排序</li>
+                  <li>优化快捷标签入口 UI 与数量上限交互</li>
+                  <li>完成一轮代码清理、重复逻辑合并与性能优化</li>
+                </ul>
+              </div>
+            </div>
+          </div>
 
         </div>
       </div>

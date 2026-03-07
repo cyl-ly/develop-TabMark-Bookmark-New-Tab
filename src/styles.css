@@ -2473,3 +2473,52 @@ body .default-folders-tabs.sidebar-expanded {
 .bookmark-folder-filter-tag.sortable-chosen {
   box-shadow: 0 12px 26px rgba(15, 23, 42, 0.12);
 }
+
+
+.secondary-about-content {
+  align-items: flex-start;
+}
+
+.secondary-about-description {
+  line-height: 1.7;
+}
+
+.secondary-about-links {
+  margin-bottom: 20px;
+}
+
+.about-changelog {
+  width: 100%;
+  padding: 16px;
+  border-radius: 12px;
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+}
+
+.about-changelog-title {
+  margin: 0 0 12px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.about-changelog-list {
+  margin: 0;
+  padding-left: 18px;
+  color: #4b5563;
+  line-height: 1.8;
+  font-size: 13px;
+}
+
+[data-theme="dark"] .about-changelog {
+  background: #2a2d33;
+  border-color: #3f444d;
+}
+
+[data-theme="dark"] .about-changelog-title {
+  color: #f3f4f6;
+}
+
+[data-theme="dark"] .about-changelog-list {
+  color: #d1d5db;
+}

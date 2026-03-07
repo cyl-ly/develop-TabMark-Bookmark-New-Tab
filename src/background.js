@@ -36,59 +36,11 @@ chrome.runtime.onInstalled.addListener((details) => {
     }
   });
   
-  // 注册侧边栏导航内容脚本
-  registerSidePanelNavigationScript();
 });
-
-// 注册侧边栏导航内容脚本
-function registerSidePanelNavigationScript() {
-  // 我们不再使用 chrome.scripting.registerContentScripts
-  // 因为在 manifest.json 中已经静态注册了内容脚本
-  console.log('Using static content script registration from manifest.json');
-  // 不需要动态注册，因为在 manifest.json 中已经有这个内容脚本:
-  // {
-  //   "matches": ["<all_urls>"],
-  //   "js": ["src/sidepanel-navigation.js"],
-  //   "run_at": "document_end"
-  // }
-}
 
 // 修改防重复机制
 const openingTabs = new Set();
 const DEBOUNCE_TIME = 1000;
-
-function createTab(url, options = {}) {
-  return new Promise((resolve, reject) => {
-    // 检查是否正在打开相同的 URL
-    if (openingTabs.has(url)) {
-      console.log('Preventing duplicate tab open for URL:', url);
-      reject(new Error('Duplicate request'));
-      return;
-    }
-
-    // 添加到正在打开的集合中
-    openingTabs.add(url);
-
-    // 创建新标签页
-    chrome.tabs.create({ 
-      url: url,
-      active: true,
-      ...options
-    }, (tab) => {
-      if (chrome.runtime.lastError) {
-        openingTabs.delete(url); // 发生错误时立即移除
-        reject(chrome.runtime.lastError);
-      } else {
-        resolve(tab);
-      }
-
-      // 设置延时移除URL
-      setTimeout(() => {
-        openingTabs.delete(url);
-      }, DEBOUNCE_TIME);
-    });
-  });
-}
 
 // 合并所有消息监听逻辑到一个监听器中
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
@@ -654,40 +606,33 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   
   switch (request.action) {
     case 'fetchBookmarks':
-      chrome.bookmarks.getTree(async (bookmarkTreeNodes) => {
+      chrome.bookmarks.getTree((bookmarkTreeNodes) => {
         if (chrome.runtime.lastError) {
           sendResponse({ error: chrome.runtime.lastError.message });
-        } else {
-          try {
-            const folders = await new Promise((resolve) => {
-              chrome.bookmarks.getTree((tree) => {
-                resolve(tree);
-              });
-            });
-            
-            const processedBookmarks = [];
-            
-            function processBookmarkNode(node) {
-              if (node.url) {
-                processedBookmarks.push(node);
-              }
-              if (node.children) {
-                node.children.forEach(processBookmarkNode);
-              }
+          return;
+        }
+
+        try {
+          const processedBookmarks = [];
+
+          function processBookmarkNode(node) {
+            if (node.url) {
+              processedBookmarks.push(node);
             }
-            
-            folders.forEach(folder => {
-              processBookmarkNode(folder);
-            });
-            
-            sendResponse({ 
-              bookmarks: bookmarkTreeNodes,
-              processedBookmarks: processedBookmarks,
-              success: true 
-            });
-          } catch (error) {
-            sendResponse({ error: error.message });
+            if (node.children) {
+              node.children.forEach(processBookmarkNode);
+            }
           }
+
+          bookmarkTreeNodes.forEach(processBookmarkNode);
+
+          sendResponse({
+            bookmarks: bookmarkTreeNodes,
+            processedBookmarks,
+            success: true
+          });
+        } catch (error) {
+          sendResponse({ error: error.message });
         }
       });
       return true;
@@ -1051,8 +996,4 @@ chrome.action.onClicked.addListener((tab) => {
   // 点击扩展图标时切换侧边栏
   toggleSidePanel();
 });
-
-// 在 background.js 顶部添加这些变量
-let lastOpenedUrl = '';
-let lastOpenTime = 0;
 

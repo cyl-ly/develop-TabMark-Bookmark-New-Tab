@@ -165,46 +165,6 @@
     }
   }
 
-  function findBookmarkNodeById(node, id) {
-    if (node.id === id) {
-      return node;
-    }
-    if (node.children) {
-      for (let child of node.children) {
-        let result = findBookmarkNodeById(child, id);
-        if (result) {
-          return result;
-        }
-      }
-    }
-    return null;
-  }
-
-  function findBookmarksByParentId(node, parentId) {
-    let result = [];
-    if (node.id === parentId) {
-      return node.children || [];
-    }
-    if (node.children) {
-      for (let child of node.children) {
-        result = result.concat(findBookmarksByParentId(child, parentId));
-      }
-    }
-    return result;
-  }
-
-  function getDefaultBookmarkId() {
-    return new Promise((resolve, reject) => {
-      chrome.runtime.sendMessage({ action: 'getDefaultBookmarkId' }, (response) => {
-        if (response && response.defaultBookmarkId !== undefined) {
-          resolve(response.defaultBookmarkId);
-        } else {
-          reject(new Error('无法获取默认书签 ID'));
-        }
-      });
-    });
-  }
-
   let cachedSelectedText = "";
 
   const extensionContainer = document.createElement('div');

@@ -95,6 +95,18 @@ main.flex-1 {
   transition: all 0.2s ease;
   box-shadow: 0 4px 10px rgba(15, 23, 42, 0.04);
   backdrop-filter: blur(8px);
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.bookmark-folder-filter-tag:focus,
+.bookmark-folder-filter-tag:focus-visible {
+  outline: none;
+}
+
+.bookmark-folder-filter-tag::selection {
+  background: transparent;
 }
 
 .bookmark-folder-filter-tag:hover {
@@ -2204,4 +2216,309 @@ body .default-folders-tabs.sidebar-expanded {
 [data-theme="dark"] .bing-wallpaper-item.active {
     border-color: var(--primary-color, #10b981);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+
+.quick-links-empty-state {
+  width: 100%;
+  padding: 12px 0 4px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.quick-links-empty-title {
+  font-size: 13px;
+  color: #717882;
+}
+
+.quick-links-empty-button,
+.quick-links-add-button,
+.quick-links-manager-button {
+  border: 1px solid #d1d5db;
+  background: #ffffff;
+  color: #374151;
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.quick-links-empty-button:hover,
+.quick-links-add-button:hover,
+.quick-links-manager-button:hover {
+  border-color: #10b981;
+  color: #047857;
+}
+
+.quick-links-manager {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.quick-links-manager-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.quick-links-manager-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.quick-links-manager-hint {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: #6b7280;
+  line-height: 1.5;
+}
+
+.quick-links-manager-empty {
+  display: none;
+  margin-top: 12px;
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.quick-links-manager-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.quick-links-manager-item {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: #f9fafb;
+}
+
+.quick-links-manager-drag {
+  border: none;
+  background: transparent;
+  color: #9ca3af;
+  cursor: grab;
+  font-size: 14px;
+  padding: 0;
+}
+
+.quick-links-manager-meta {
+  min-width: 0;
+}
+
+.quick-links-manager-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.quick-links-manager-url {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #6b7280;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.quick-links-manager-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.quick-links-manager-button.delete:hover {
+  border-color: #ef4444;
+  color: #dc2626;
+}
+
+[data-theme="dark"] .quick-links-empty-title,
+[data-theme="dark"] .quick-links-manager-hint,
+[data-theme="dark"] .quick-links-manager-empty,
+[data-theme="dark"] .quick-links-manager-url {
+  color: #9ca3af;
+}
+
+[data-theme="dark"] .quick-links-empty-button,
+[data-theme="dark"] .quick-links-add-button,
+[data-theme="dark"] .quick-links-manager-button {
+  background: #2f3135;
+  border-color: #4b5563;
+  color: #e5e7eb;
+}
+
+[data-theme="dark"] .quick-links-manager-item {
+  background: #24262b;
+  border-color: #3f444d;
+}
+
+[data-theme="dark"] .quick-links-manager-title,
+[data-theme="dark"] .quick-links-manager-name {
+  color: #f3f4f6;
+}
+
+
+.quick-link-add-entry {
+  align-items: center;
+}
+
+.quick-link-add-tile {
+  border: 1px dashed #cbd5e1;
+  background: rgba(255, 255, 255, 0.82);
+  color: #475569;
+}
+
+.quick-link-add-tile:hover {
+  border-color: #10b981;
+  color: #059669;
+  background: #f0fdf4;
+}
+
+.quick-link-add-tile.disabled {
+  opacity: 0.66;
+  cursor: not-allowed;
+}
+
+.quick-link-add-icon {
+  margin-top: 0 !important;
+  width: 22px !important;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: inherit;
+}
+
+.quick-link-add-icon svg {
+  width: 22px;
+  height: 22px;
+  display: block;
+}
+
+.quick-link-add-text {
+  font-size: 12px;
+  font-weight: 500;
+  color: #717882;
+}
+
+[data-theme="dark"] .quick-link-add-tile {
+  background: #2f3135;
+  border-color: #4b5563;
+  color: #d1d5db;
+}
+
+[data-theme="dark"] .quick-link-add-tile:hover {
+  border-color: #10b981;
+  color: #f0fdf4;
+  background: #064e3b;
+}
+
+[data-theme="dark"] .quick-link-add-tile.disabled {
+  color: #9ca3af;
+}
+
+[data-theme="dark"] .quick-link-add-text {
+  color: #9ca3af;
+}
+
+
+.quick-links-add-button.disabled,
+.quick-links-manager-button.disabled {
+  opacity: 0.66;
+  cursor: not-allowed;
+}
+
+
+.quick-link-item-container:not(.quick-link-add-entry) {
+  cursor: grab;
+}
+
+.quick-link-item-container:not(.quick-link-add-entry):active {
+  cursor: grabbing;
+}
+
+.quick-link-item-container.sortable-ghost {
+  opacity: 0.35;
+}
+
+.quick-link-item-container.sortable-chosen .quick-link-item {
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.12);
+  transform: scale(1.04);
+}
+
+
+.bookmark-folder-filter-tag:not([data-filter-id="__all__"]) {
+  cursor: grab;
+}
+
+.bookmark-folder-filter-tag:not([data-filter-id="__all__"]):active {
+  cursor: grabbing;
+}
+
+.bookmark-folder-filter-tag.sortable-ghost {
+  opacity: 0.35;
+}
+
+.bookmark-folder-filter-tag.sortable-chosen {
+  box-shadow: 0 12px 26px rgba(15, 23, 42, 0.12);
+}
+
+
+.secondary-about-content {
+  align-items: flex-start;
+}
+
+.secondary-about-description {
+  line-height: 1.7;
+}
+
+.secondary-about-links {
+  margin-bottom: 20px;
+}
+
+.about-changelog {
+  width: 100%;
+  padding: 16px;
+  border-radius: 12px;
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+}
+
+.about-changelog-title {
+  margin: 0 0 12px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.about-changelog-list {
+  margin: 0;
+  padding-left: 18px;
+  color: #4b5563;
+  line-height: 1.8;
+  font-size: 13px;
+}
+
+[data-theme="dark"] .about-changelog {
+  background: #2a2d33;
+  border-color: #3f444d;
+}
+
+[data-theme="dark"] .about-changelog-title {
+  color: #f3f4f6;
+}
+
+[data-theme="dark"] .about-changelog-list {
+  color: #d1d5db;
 }

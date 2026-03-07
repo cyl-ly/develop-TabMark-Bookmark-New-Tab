@@ -6,6 +6,7 @@ const WelcomeManager = {
         lastBackground: null,
         lastTextColor: null
     },
+    autoUpdateTimer: null,
 
     // 初始化方法
     initialize() {
@@ -75,6 +76,8 @@ const WelcomeManager = {
         }
         
         this.colorCache.lastBackground = backgroundImage !== 'none' ? backgroundImage : backgroundColor;
+        this.colorCache.sampledBackground = backgroundImage !== 'none' ? backgroundImage : null;
+        this.colorCache.sampledAreas = new Map();
         
         // 应用初始颜色
         const welcomeElement = document.getElementById('welcome-message');
@@ -83,154 +86,200 @@ const WelcomeManager = {
         }
     },
 
-    // 调整文字颜色
-    adjustTextColor(element) {
+    getBackgroundContext() {
         const computedStyle = window.getComputedStyle(document.documentElement);
-        const backgroundColor = computedStyle.backgroundColor;
-        const backgroundImage = document.body.style.backgroundImage;
-        const isDarkMode = document.documentElement.getAttribute('data-theme') === 'dark';
-        
-        // 处理纯色背景的情况
-        if (!backgroundImage || backgroundImage === 'none') {
-            // 如果是暗色模式，直接使用亮色文本
-            if (isDarkMode) {
-                element.style.color = 'rgba(255, 255, 255, 0.9)';
-                this.colorCache.lastTextColor = 'rgba(255, 255, 255, 0.9)';
-                return;
-            }
-            
-            // 亮色模式下，根据背景色计算文字颜色
-            let textColor = 'rgba(51, 51, 51, 0.9)'; // 默认深色文本
-            
-            if (backgroundColor && backgroundColor !== 'rgba(0, 0, 0, 0)' && backgroundColor !== 'transparent') {
-                const rgb = backgroundColor.match(/\d+/g);
-                if (rgb && rgb.length >= 3) {
-                    const brightness = (parseInt(rgb[0]) * 0.299 + parseInt(rgb[1]) * 0.587 + parseInt(rgb[2]) * 0.114);
-                    textColor = brightness > 128 ? 'rgba(51, 51, 51, 0.9)' : 'rgba(255, 255, 255, 0.9)';
-                }
-            }
-            
-            this.colorCache.lastTextColor = textColor;
-            element.style.color = textColor;
-            return;
+        return {
+            backgroundColor: computedStyle.backgroundColor,
+            backgroundImage: document.body.style.backgroundImage,
+            isDarkMode: document.documentElement.getAttribute('data-theme') === 'dark'
+        };
+    },
+
+    getSolidBackgroundAnalysis(backgroundColor) {
+        if (!backgroundColor || backgroundColor === 'rgba(0, 0, 0, 0)' || backgroundColor === 'transparent') {
+            return null;
         }
 
-        // 处理壁纸背景的情况
-        if (backgroundImage && backgroundImage !== 'none') {
-            // 先检查缓存
-            if (this.colorCache.lastBackground === backgroundImage && this.colorCache.lastTextColor) {
-                element.style.color = this.colorCache.lastTextColor;
-                // 如果有缓存，仍然进行新的计算，但不设置临时的白色文本
-            } else {
-                // 只有在没有缓存时才设置临时的白色文本
-                element.style.color = 'rgba(255, 255, 255, 0.9)';
-            }
-            
-            // 进行新的计算...
+        const rgb = backgroundColor.match(/\d+/g);
+        if (!rgb || rgb.length < 3) {
+            return null;
+        }
+
+        const r = parseInt(rgb[0], 10);
+        const g = parseInt(rgb[1], 10);
+        const b = parseInt(rgb[2], 10);
+        return {
+            r,
+            g,
+            b,
+            brightness: (r * 0.299 + g * 0.587 + b * 0.114)
+        };
+    },
+
+    getReadableTextColor(brightness, alpha = 0.9) {
+        return brightness > 128
+            ? `rgba(51, 51, 51, ${alpha})`
+            : `rgba(255, 255, 255, ${alpha})`;
+    },
+
+    getAreaCacheKey(element, sampleSize) {
+        if (!element) {
+            return `full:${sampleSize}`;
+        }
+
+        const rect = element.getBoundingClientRect();
+        return [
+            Math.round(rect.x),
+            Math.round(rect.y),
+            Math.round(rect.width),
+            Math.round(rect.height),
+            sampleSize
+        ].join(':');
+    },
+
+    sampleBackgroundColor({ element = null, sampleSize = 50 } = {}) {
+        const { backgroundColor, backgroundImage } = this.getBackgroundContext();
+
+        if (!backgroundImage || backgroundImage === 'none') {
+            return Promise.resolve(this.getSolidBackgroundAnalysis(backgroundColor));
+        }
+
+        if (this.colorCache.sampledBackground !== backgroundImage) {
+            this.colorCache.sampledBackground = backgroundImage;
+            this.colorCache.sampledAreas = new Map();
+        }
+
+        const cacheKey = this.getAreaCacheKey(element, sampleSize);
+        const cachedAnalysis = this.colorCache.sampledAreas.get(cacheKey);
+        if (cachedAnalysis) {
+            return Promise.resolve(cachedAnalysis);
+        }
+
+        return new Promise((resolve) => {
             const img = new Image();
-            img.crossOrigin = "Anonymous";
+            img.crossOrigin = 'Anonymous';
             img.src = backgroundImage.slice(5, -2);
-            
+
             img.onload = () => {
-                const canvas = document.createElement('canvas');
-                const ctx = canvas.getContext('2d');
-                const sampleSize = 50;
-
-                // 获取欢迎文字元素的位置和尺寸
-                const elementRect = element.getBoundingClientRect();
-                
-                // 计算采样区域
-                const sampleArea = {
-                    x: Math.max(0, elementRect.x),
-                    y: Math.max(0, elementRect.y),
-                    width: Math.min(elementRect.width, window.innerWidth),
-                    height: Math.min(elementRect.height, window.innerHeight)
-                };
-
-                // 设置画布尺寸
-                canvas.width = sampleSize;
-                canvas.height = sampleSize;
-
-                // 计算图片在背景中的实际尺寸和位置
-                const backgroundSize = getComputedStyle(document.body).backgroundSize;
-                const backgroundPosition = getComputedStyle(document.body).backgroundPosition;
-                
-                // 计算图片的缩放比例
-                const scale = {
-                    x: img.width / window.innerWidth,
-                    y: img.height / window.innerHeight
-                };
-
-                // 根据背景属性计算实际的采样区域
-                const sourceArea = {
-                    x: (sampleArea.x * scale.x),
-                    y: (sampleArea.y * scale.y),
-                    width: (sampleArea.width * scale.x),
-                    height: (sampleArea.height * scale.y)
-                };
-
-                // 绘制采样区域到画布
-                ctx.drawImage(
-                    img,
-                    sourceArea.x, sourceArea.y, sourceArea.width, sourceArea.height,  // 源图像区域
-                    0, 0, sampleSize, sampleSize  // 目标画布区域
-                );
-
                 try {
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    canvas.width = sampleSize;
+                    canvas.height = sampleSize;
+
+                    if (element) {
+                        const elementRect = element.getBoundingClientRect();
+                        const sampleArea = {
+                            x: Math.max(0, elementRect.x),
+                            y: Math.max(0, elementRect.y),
+                            width: Math.max(1, Math.min(elementRect.width || sampleSize, window.innerWidth)),
+                            height: Math.max(1, Math.min(elementRect.height || sampleSize, window.innerHeight))
+                        };
+
+                        const sourceArea = {
+                            x: sampleArea.x * (img.width / Math.max(window.innerWidth, 1)),
+                            y: sampleArea.y * (img.height / Math.max(window.innerHeight, 1)),
+                            width: Math.max(1, sampleArea.width * (img.width / Math.max(window.innerWidth, 1))),
+                            height: Math.max(1, sampleArea.height * (img.height / Math.max(window.innerHeight, 1)))
+                        };
+
+                        ctx.drawImage(
+                            img,
+                            sourceArea.x,
+                            sourceArea.y,
+                            sourceArea.width,
+                            sourceArea.height,
+                            0,
+                            0,
+                            sampleSize,
+                            sampleSize
+                        );
+                    } else {
+                        ctx.drawImage(img, 0, 0, sampleSize, sampleSize);
+                    }
+
                     const imageData = ctx.getImageData(0, 0, sampleSize, sampleSize);
                     const data = imageData.data;
-                    let r = 0, g = 0, b = 0;
+                    let r = 0;
+                    let g = 0;
+                    let b = 0;
                     let count = 0;
 
-                    // 计算采样区域的平均颜色
-                    for (let x = 0, len = data.length; x < len; x += 4) {
-                        r += data[x];
-                        g += data[x + 1];
-                        b += data[x + 2];
+                    for (let index = 0; index < data.length; index += 4) {
+                        r += data[index];
+                        g += data[index + 1];
+                        b += data[index + 2];
                         count++;
                     }
 
-                    r = Math.floor(r / count);
-                    g = Math.floor(g / count);
-                    b = Math.floor(b / count);
+                    const analysis = {
+                        r: Math.floor(r / count),
+                        g: Math.floor(g / count),
+                        b: Math.floor(b / count)
+                    };
+                    analysis.brightness = (analysis.r * 0.299 + analysis.g * 0.587 + analysis.b * 0.114);
 
-                    const brightness = (r * 0.299 + g * 0.587 + b * 0.114);
-                    console.log('[WelcomeManager] Sampled area color:', {
-                        area: sampleArea,
-                        color: {r, g, b},
-                        brightness
-                    });
-
-                    const textColor = brightness > 128 ? 
-                        'rgba(51, 51, 51, 0.9)' : 
-                        'rgba(255, 255, 255, 0.9)';
-                    
-                    // 更新缓存和应用颜色
-                    this.colorCache.lastBackground = backgroundImage;
-                    this.colorCache.lastTextColor = textColor;
-                    element.style.color = textColor;
-                    element.style.transition = 'color 0.3s ease';
+                    this.colorCache.sampledAreas.set(cacheKey, analysis);
+                    resolve(analysis);
                 } catch (error) {
-                    console.error('分析背景颜色失败:', error, {
-                        sampleArea,
-                        sourceArea
-                    });
-                    element.style.color = 'rgba(255, 255, 255, 0.9)';
+                    console.error('分析背景颜色失败:', error);
+                    resolve(null);
                 }
             };
 
             img.onerror = () => {
                 console.error('背景图片加载失败');
-                if (!this.colorCache.lastTextColor) {
-                    // 只有在没有缓存颜色时才设置默认颜色
-                    element.style.color = 'rgba(255, 255, 255, 0.9)';
-                }
+                resolve(null);
             };
+        });
+    },
 
-            // 在图片加载过程中先使用白色文本
-            element.style.color = 'rgba(255, 255, 255, 0.9)';
+    // 调整文字颜色
+    adjustTextColor(element) {
+        const { backgroundColor, backgroundImage, isDarkMode } = this.getBackgroundContext();
+
+        if (!backgroundImage || backgroundImage === 'none') {
+            if (isDarkMode) {
+                element.style.color = 'rgba(255, 255, 255, 0.9)';
+                this.colorCache.lastTextColor = 'rgba(255, 255, 255, 0.9)';
+                return;
+            }
+
+            const analysis = this.getSolidBackgroundAnalysis(backgroundColor);
+            const textColor = analysis
+                ? this.getReadableTextColor(analysis.brightness)
+                : 'rgba(51, 51, 51, 0.9)';
+
+            this.colorCache.lastTextColor = textColor;
+            element.style.color = textColor;
             return;
         }
+
+        const requestedBackground = backgroundImage;
+        if (this.colorCache.lastBackground === requestedBackground && this.colorCache.lastTextColor) {
+            element.style.color = this.colorCache.lastTextColor;
+        } else {
+            element.style.color = 'rgba(255, 255, 255, 0.9)';
+        }
+
+        this.sampleBackgroundColor({ element }).then((analysis) => {
+            if (document.body.style.backgroundImage !== requestedBackground) {
+                return;
+            }
+
+            if (!analysis) {
+                if (!this.colorCache.lastTextColor) {
+                    element.style.color = 'rgba(255, 255, 255, 0.9)';
+                }
+                return;
+            }
+
+            const textColor = this.getReadableTextColor(analysis.brightness);
+            this.colorCache.lastBackground = requestedBackground;
+            this.colorCache.lastTextColor = textColor;
+            element.style.color = textColor;
+            element.style.transition = 'color 0.3s ease';
+        });
     },
 
     // 设置事件监听器
@@ -245,28 +294,6 @@ const WelcomeManager = {
             }
         });
 
-        // 添加对欢迎消息内容变化的监听
-        const welcomeElement = document.getElementById('welcome-message');
-        if (welcomeElement) {
-            const observer = new MutationObserver((mutations) => {
-                mutations.forEach((mutation) => {
-                    if (mutation.type === 'childList' || mutation.type === 'characterData') {
-                        const currentText = welcomeElement.textContent;
-                        // 检查是否缺少用户名
-                        if (currentText && !currentText.includes(userName) && 
-                            (currentText.includes('早上好') || currentText.includes('下午好') || currentText.includes('晚上好'))) {
-                            this.updateWelcomeMessage();
-                        }
-                    }
-                });
-            });
-            
-            observer.observe(welcomeElement, {
-                childList: true,
-                characterData: true,
-                subtree: true
-            });
-        }
     },
 
     // 添加主题变化监听方法
@@ -286,6 +313,29 @@ const WelcomeManager = {
             attributes: true,
             attributeFilter: ['data-theme']
         });
+    },
+
+    startAutoUpdate() {
+        this.stopAutoUpdate();
+
+        const tick = () => {
+            if (document.visibilityState !== 'visible') {
+                this.autoUpdateTimer = null;
+                return;
+            }
+
+            this.updateWelcomeMessage();
+            this.autoUpdateTimer = window.setTimeout(tick, 60000);
+        };
+
+        this.autoUpdateTimer = window.setTimeout(tick, 60000);
+    },
+
+    stopAutoUpdate() {
+        if (this.autoUpdateTimer) {
+            clearTimeout(this.autoUpdateTimer);
+            this.autoUpdateTimer = null;
+        }
     }
 };
 
@@ -295,6 +345,14 @@ window.WelcomeManager = WelcomeManager;
 // DOM加载完成后初始化
 document.addEventListener('DOMContentLoaded', () => {
     WelcomeManager.initialize();
-    // 每分钟更新一次欢迎消息
-    setInterval(() => WelcomeManager.updateWelcomeMessage(), 60000);
+    WelcomeManager.startAutoUpdate();
+
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+            WelcomeManager.updateWelcomeMessage();
+            WelcomeManager.startAutoUpdate();
+        } else {
+            WelcomeManager.stopAutoUpdate();
+        }
+    });
 });

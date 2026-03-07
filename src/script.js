@@ -28,6 +28,60 @@ const BOOKMARK_FILTER_ALL_ID = '__all__';
 const BOOKMARK_FILTER_ORDER_STORAGE_KEY = 'bookmarkFilterOrders';
 let bookmarkFilterSortable = null;
 const bookmarkFilterOrderCache = new Map();
+const sidebarSearchState = {
+  requestToken: 0,
+  treePromise: null,
+  currentResults: [],
+  currentQuery: '',
+  selectedIndex: -1,
+  isComposing: false
+};
+
+
+const SIDEBAR_SEARCH_ALIAS_GROUPS = [
+  ['google', '谷歌', 'google search', '谷歌搜索'],
+  ['gmail', '谷歌邮箱', 'google mail'],
+  ['google docs', 'docs.google', '谷歌文档'],
+  ['google drive', 'drive.google', '谷歌云盘', '谷歌网盘'],
+  ['google maps', 'maps.google', '谷歌地图'],
+  ['bing', '必应', 'bing search'],
+  ['baidu', '百度', '百度搜索'],
+  ['github', '代码托管', 'git仓库', 'github仓库', '代码仓库'],
+  ['gitlab', '极狐', 'gitlab仓库'],
+  ['stackoverflow', 'stack overflow', '程序问答'],
+  ['youtube', '油管', '优兔', 'youtube视频'],
+  ['twitter', 'x.com', '推特', '社交动态'],
+  ['reddit', '红迪', 'reddit论坛'],
+  ['wikipedia', '维基百科', 'wiki'],
+  ['notion', 'notion文档', '笔记文档'],
+  ['slack', '协作消息', '团队沟通'],
+  ['telegram', '电报'],
+  ['discord', '语音社区'],
+  ['wechat', '微信'],
+  ['feishu', '飞书'],
+  ['claude', 'anthropic', '克劳德'],
+  ['chatgpt', 'gpt', 'openai', '聊天gpt'],
+  ['perplexity', '困惑搜索', 'perplexity ai'],
+  ['deepseek', '深度求索', 'deepseek ai'],
+  ['kimi', '月之暗面', 'kimi智能助手'],
+  ['doubao', '豆包', '豆包ai'],
+  ['felo', 'felo搜索'],
+  ['metaso', '秘塔', '秘塔搜索'],
+  ['grok', 'xai', 'grok ai'],
+  ['bilibili', 'b站', '哔哩哔哩'],
+  ['xiaohongshu', '小红书'],
+  ['zhihu', '知乎'],
+  ['douban', '豆瓣'],
+  ['weibo', '微博', '新浪微博'],
+  ['jike', '即刻'],
+  ['juejin', '掘金'],
+  ['sspai', '少数派'],
+  ['taobao', '淘宝'],
+  ['jd.com', '京东'],
+  ['aliyundrive', '阿里云盘'],
+  ['pan.baidu', '百度网盘'],
+  ['tencent docs', '腾讯文档']
+];
 
 const bookmarkFilterState = {
   rootParentId: null,
@@ -651,6 +705,7 @@ document.addEventListener('DOMContentLoaded', function() {
   // 只调用一次搜索引擎初始化
   createSearchEngineDropdown();
   initializeSearchEngineDialog();
+  initSidebarSearch();
 
  
 
@@ -1716,6 +1771,478 @@ function isMainPageBookmarkFilterEnabled() {
   return !IS_SIDEPANEL_PAGE && !!document.getElementById('bookmark-folder-filter-bar');
 }
 
+
+function getSidebarSearchText(key, fallback) {
+  return chrome.i18n.getMessage(key) || fallback;
+}
+
+
+function getSidebarSearchAliases(title, url = '') {
+  const sourceText = `${title || ''} ${url || ''}`.toLowerCase();
+  const aliases = new Set();
+
+  SIDEBAR_SEARCH_ALIAS_GROUPS.forEach(group => {
+    const normalizedGroup = group.map(item => item.toLowerCase());
+    if (normalizedGroup.some(alias => sourceText.includes(alias))) {
+      group.forEach(alias => aliases.add(alias));
+    }
+  });
+
+  return Array.from(aliases);
+}
+
+function getSidebarSearchMatchedAliases(item, query) {
+  const normalizedQuery = (query || '').trim().toLowerCase();
+  if (!normalizedQuery || !Array.isArray(item.aliases)) {
+    return [];
+  }
+
+  return item.aliases.filter(alias => alias.toLowerCase().includes(normalizedQuery));
+}
+
+
+function escapeSidebarSearchRegExp(text) {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function createSidebarHighlightedFragment(text, query) {
+  const fragment = document.createDocumentFragment();
+  const sourceText = text || '';
+  const normalizedQuery = (query || '').trim();
+
+  if (!normalizedQuery) {
+    fragment.appendChild(document.createTextNode(sourceText));
+    return fragment;
+  }
+
+  const regex = new RegExp(`(${escapeSidebarSearchRegExp(normalizedQuery)})`, 'ig');
+  const parts = sourceText.split(regex);
+
+  parts.forEach(part => {
+    if (!part) {
+      return;
+    }
+
+    if (part.toLowerCase() === normalizedQuery.toLowerCase()) {
+      const mark = document.createElement('mark');
+      mark.className = 'sidebar-search-highlight';
+      mark.textContent = part;
+      fragment.appendChild(mark);
+    } else {
+      fragment.appendChild(document.createTextNode(part));
+    }
+  });
+
+  return fragment;
+}
+
+function updateSidebarSearchSelection(index) {
+  const searchResults = document.getElementById('sidebar-search-results');
+  if (!searchResults) {
+    return;
+  }
+
+  const items = Array.from(searchResults.querySelectorAll('.sidebar-search-result'));
+  if (items.length === 0) {
+    sidebarSearchState.selectedIndex = -1;
+    return;
+  }
+
+  const safeIndex = Math.max(0, Math.min(index, items.length - 1));
+  sidebarSearchState.selectedIndex = safeIndex;
+
+  items.forEach((item, itemIndex) => {
+    const isSelected = itemIndex === safeIndex;
+    item.classList.toggle('selected', isSelected);
+    item.setAttribute('aria-selected', isSelected ? 'true' : 'false');
+    if (isSelected) {
+      item.scrollIntoView({ block: 'nearest' });
+    }
+  });
+}
+
+async function activateSidebarSearchResult(index = sidebarSearchState.selectedIndex) {
+  const results = sidebarSearchState.currentResults || [];
+  const target = results[index];
+  if (!target) {
+    return;
+  }
+
+  if (target.type === 'folder') {
+    await openFolderBySearchResult(target);
+  } else {
+    await openBookmarkBySettings(target);
+  }
+  clearSidebarSearch();
+}
+
+function clearSidebarSearch() {
+  const searchInput = document.getElementById('sidebar-search-input');
+  const searchResults = document.getElementById('sidebar-search-results');
+  const categoriesList = document.getElementById('categories-list');
+
+  sidebarSearchState.currentResults = [];
+  sidebarSearchState.currentQuery = '';
+  sidebarSearchState.selectedIndex = -1;
+
+  if (searchInput) {
+    searchInput.value = '';
+  }
+  if (searchResults) {
+    searchResults.innerHTML = '';
+    searchResults.hidden = true;
+  }
+  if (categoriesList) {
+    categoriesList.hidden = true;
+  }
+}
+
+async function openFolderBySearchResult(result) {
+  if (!result?.id) {
+    return;
+  }
+
+  const folderAncestors = Array.isArray(result.ancestorFolderIds) ? result.ancestorFolderIds : [];
+  const candidateRootId = folderAncestors.length > 0 ? folderAncestors[0] : result.id;
+  const rootId = candidateRootId || result.id;
+  const shouldUseFilterTabs = isMainPageBookmarkFilterEnabled() && rootId !== result.id;
+
+  await updateBookmarksDisplay(rootId);
+
+  if (shouldUseFilterTabs) {
+    await switchBookmarkFilterTab(result.id);
+  }
+}
+
+async function openBookmarkBySettings(bookmark) {
+  if (!bookmark?.url) {
+    return;
+  }
+
+  const isSidePanel = window.location.pathname.endsWith('sidepanel.html');
+  const isInternalUrl = bookmark.url.startsWith('chrome://') ||
+    bookmark.url.startsWith('chrome-extension://') ||
+    bookmark.url.startsWith('edge://') ||
+    bookmark.url.startsWith('about:');
+
+  if (isInternalUrl) {
+    await chrome.tabs.create({ url: bookmark.url, active: true });
+    return;
+  }
+
+  if (isSidePanel) {
+    const result = await chrome.storage.sync.get(['sidepanelOpenInNewTab', 'sidepanelOpenInSidepanel']);
+    const openInNewTab = result.sidepanelOpenInNewTab !== false;
+    const openInSidepanel = result.sidepanelOpenInSidepanel === true;
+
+    if (openInSidepanel) {
+      try {
+        if (typeof SidePanelManager === 'undefined') {
+          const sidePanelContent = document.getElementById('side-panel-content');
+          const sidePanelIframe = document.getElementById('side-panel-iframe');
+
+          if (sidePanelContent && sidePanelIframe) {
+            sidePanelContent.style.display = 'block';
+            sidePanelIframe.src = bookmark.url;
+
+            let backButton = document.querySelector('.back-to-links');
+            if (!backButton) {
+              backButton = document.createElement('div');
+              backButton.className = 'back-to-links';
+              backButton.innerHTML = '<span class="material-icons">arrow_back</span>';
+              document.body.appendChild(backButton);
+              backButton.addEventListener('click', () => {
+                sidePanelContent.style.display = 'none';
+                backButton.style.display = 'none';
+              });
+            }
+
+            backButton.style.display = 'flex';
+          } else {
+            await chrome.tabs.create({ url: bookmark.url, active: true });
+          }
+        } else if (window.sidePanelManager) {
+          window.sidePanelManager.loadUrl(bookmark.url);
+        } else {
+          window.sidePanelManager = new SidePanelManager();
+          window.sidePanelManager.loadUrl(bookmark.url);
+        }
+      } catch (error) {
+        await chrome.tabs.create({ url: bookmark.url, active: true });
+      }
+      return;
+    }
+
+    if (openInNewTab) {
+      await chrome.tabs.create({ url: bookmark.url, active: true });
+    }
+    return;
+  }
+
+  const result = await chrome.storage.sync.get(['openInNewTab']);
+  if (result.openInNewTab !== false) {
+    window.open(bookmark.url, '_blank');
+  } else {
+    window.location.href = bookmark.url;
+  }
+}
+
+async function getSidebarSearchTree() {
+  if (bookmarkTreeNodes && bookmarkTreeNodes.length > 0) {
+    return bookmarkTreeNodes;
+  }
+
+  if (!sidebarSearchState.treePromise) {
+    sidebarSearchState.treePromise = chrome.bookmarks.getTree().then((nodes) => {
+      bookmarkTreeNodes = nodes;
+      return nodes;
+    }).finally(() => {
+      sidebarSearchState.treePromise = null;
+    });
+  }
+
+  return sidebarSearchState.treePromise;
+}
+
+function buildSidebarSearchIndex(nodes) {
+  const results = [];
+
+  function walk(node, path = [], ancestorFolderIds = []) {
+    const nextPath = node.parentId === '0' ? [node.title] : [...path, node.title];
+    const nextAncestors = node.url ? ancestorFolderIds : [...ancestorFolderIds, node.id];
+
+    if (node.parentId !== '0') {
+      const resolvedTitle = node.title || getSidebarSearchText('untitledBookmark', '未命名');
+      results.push({
+        id: node.id,
+        title: resolvedTitle,
+        url: node.url || '',
+        type: node.url ? 'bookmark' : 'folder',
+        path: nextPath,
+        parentId: node.parentId,
+        ancestorFolderIds: ancestorFolderIds,
+        aliases: getSidebarSearchAliases(resolvedTitle, node.url || '')
+      });
+    }
+
+    if (node.children && node.children.length > 0) {
+      node.children.forEach(child => walk(child, nextPath, nextAncestors));
+    }
+  }
+
+  nodes.forEach(rootNode => {
+    if (rootNode.children) {
+      rootNode.children.forEach(child => walk(child, []));
+    }
+  });
+
+  return results;
+}
+
+function getSidebarSearchScore(item, normalizedQuery) {
+  const title = (item.title || '').toLowerCase();
+  const url = (item.url || '').toLowerCase();
+  const aliasText = Array.isArray(item.aliases) ? item.aliases.join(' ').toLowerCase() : '';
+  let score = 0;
+
+  if (title === normalizedQuery) score += 120;
+  if (title.startsWith(normalizedQuery)) score += 90;
+  if (title.includes(normalizedQuery)) score += 60;
+  if (url.includes(normalizedQuery)) score += 35;
+  if (aliasText === normalizedQuery) score += 95;
+  if (aliasText.startsWith(normalizedQuery)) score += 70;
+  if (aliasText.includes(normalizedQuery)) score += 50;
+
+  let pointer = 0;
+  for (const char of title) {
+    if (char === normalizedQuery[pointer]) {
+      pointer += 1;
+    }
+    if (pointer === normalizedQuery.length) {
+      score += 20;
+      break;
+    }
+  }
+
+  if (item.type === 'folder') {
+    score += 10;
+  }
+
+  return score;
+}
+
+function renderSidebarSearchResults(results, query) {
+  const searchResults = document.getElementById('sidebar-search-results');
+  const categoriesList = document.getElementById('categories-list');
+  if (!searchResults || !categoriesList) {
+    return;
+  }
+
+  searchResults.innerHTML = '';
+  categoriesList.hidden = true;
+  searchResults.hidden = false;
+  sidebarSearchState.currentResults = results;
+  sidebarSearchState.currentQuery = query;
+  sidebarSearchState.selectedIndex = results.length > 0 ? 0 : -1;
+
+  if (results.length === 0) {
+    const emptyState = document.createElement('div');
+    emptyState.className = 'sidebar-search-empty';
+    emptyState.textContent = getSidebarSearchText('sidebarSearchEmpty', '未找到匹配的书签或文件夹');
+    searchResults.appendChild(emptyState);
+    return;
+  }
+
+  const fragment = document.createDocumentFragment();
+
+  results.forEach((result) => {
+    const item = document.createElement('button');
+    item.type = 'button';
+    item.className = 'sidebar-search-result';
+
+    const head = document.createElement('div');
+    head.className = 'sidebar-search-result-head';
+
+    const icon = document.createElement('span');
+    icon.className = 'sidebar-search-result-icon';
+    icon.innerHTML = result.type === 'folder' ? ICONS.folder : ICONS.open_in_new;
+
+    const title = document.createElement('span');
+    title.className = 'sidebar-search-result-title';
+    title.appendChild(createSidebarHighlightedFragment(result.title, query));
+
+    const type = document.createElement('span');
+    type.className = 'sidebar-search-result-type';
+    type.textContent = result.type === 'folder'
+      ? getSidebarSearchText('sidebarSearchFolderType', '文件夹')
+      : getSidebarSearchText('sidebarSearchBookmarkType', '书签');
+
+    head.appendChild(icon);
+    head.appendChild(title);
+    head.appendChild(type);
+
+    const path = document.createElement('div');
+    path.className = 'sidebar-search-result-path';
+    path.appendChild(createSidebarHighlightedFragment(result.path.join(' / '), query));
+
+    const matchedAliases = getSidebarSearchMatchedAliases(result, query);
+    let aliasLine = null;
+    if (matchedAliases.length > 0 && !(result.title || '').toLowerCase().includes((query || '').trim().toLowerCase())) {
+      aliasLine = document.createElement('div');
+      aliasLine.className = 'sidebar-search-result-alias';
+      aliasLine.textContent = `${getSidebarSearchText('sidebarSearchAliasLabel', '别名')}：${matchedAliases.slice(0, 3).join(' / ')}`;
+    }
+
+    item.appendChild(head);
+    item.appendChild(path);
+    if (aliasLine) {
+      item.appendChild(aliasLine);
+    }
+
+    item.addEventListener('mouseenter', () => {
+      updateSidebarSearchSelection(results.indexOf(result));
+    });
+
+    item.addEventListener('click', async () => {
+      await activateSidebarSearchResult(results.indexOf(result));
+    });
+
+    fragment.appendChild(item);
+  });
+
+  searchResults.appendChild(fragment);
+  updateSidebarSearchSelection(sidebarSearchState.selectedIndex);
+}
+
+async function performSidebarSearch(query) {
+  const normalizedQuery = query.trim().toLowerCase();
+  if (!normalizedQuery) {
+    clearSidebarSearch();
+    return;
+  }
+
+  const requestToken = ++sidebarSearchState.requestToken;
+  const treeNodes = await getSidebarSearchTree();
+  const searchIndex = buildSidebarSearchIndex(treeNodes);
+  const results = searchIndex
+    .map(item => ({ item, score: getSidebarSearchScore(item, normalizedQuery) }))
+    .filter(entry => entry.score > 0)
+    .sort((a, b) => b.score - a.score || a.item.path.length - b.item.path.length)
+    .slice(0, 40)
+    .map(entry => entry.item);
+
+  if (requestToken !== sidebarSearchState.requestToken) {
+    return;
+  }
+
+  renderSidebarSearchResults(results, query);
+}
+
+function initSidebarSearch() {
+  const searchInput = document.getElementById('sidebar-search-input');
+  const searchResults = document.getElementById('sidebar-search-results');
+  const categoriesList = document.getElementById('categories-list');
+
+  if (!searchInput || !searchResults || !categoriesList) {
+    return;
+  }
+
+  categoriesList.hidden = true;
+  searchInput.placeholder = getSidebarSearchText('sidebarSearchPlaceholder', '搜索书签和文件夹');
+  const handleSearch = _.debounce(() => {
+    performSidebarSearch(searchInput.value);
+  }, 150);
+
+  searchInput.addEventListener('input', handleSearch);
+  searchInput.addEventListener('compositionstart', () => {
+    sidebarSearchState.isComposing = true;
+  });
+  searchInput.addEventListener('compositionend', () => {
+    sidebarSearchState.isComposing = false;
+    handleSearch();
+  });
+  searchInput.addEventListener('keydown', async (event) => {
+    if (event.isComposing || sidebarSearchState.isComposing || event.keyCode === 229) {
+      return;
+    }
+
+    if (event.key === 'Escape') {
+      clearSidebarSearch();
+      searchInput.blur();
+      return;
+    }
+
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      if (sidebarSearchState.currentResults.length > 0) {
+        updateSidebarSearchSelection(sidebarSearchState.selectedIndex + 1);
+      }
+      return;
+    }
+
+    if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      if (sidebarSearchState.currentResults.length > 0) {
+        const nextIndex = sidebarSearchState.selectedIndex <= 0
+          ? sidebarSearchState.currentResults.length - 1
+          : sidebarSearchState.selectedIndex - 1;
+        updateSidebarSearchSelection(nextIndex);
+      }
+      return;
+    }
+
+    if (event.key === 'Enter') {
+      if (sidebarSearchState.currentResults.length > 0) {
+        event.preventDefault();
+        if (sidebarSearchState.selectedIndex === -1) {
+          updateSidebarSearchSelection(0);
+        }
+        await activateSidebarSearchResult();
+      }
+    }
+  });
+}
+
 function getSortedBookmarkItems(items = []) {
   return [...items].sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
 }
@@ -2202,124 +2729,7 @@ function createBookmarkCard(bookmark, index) {
     isProcessingClick = true;
 
     try {
-      // 通过页面文件名判断环境
-      const isSidePanel = window.location.pathname.endsWith('sidepanel.html');
-      const isInternalUrl = bookmark.url.startsWith('chrome://') || 
-                           bookmark.url.startsWith('chrome-extension://') ||
-                           bookmark.url.startsWith('edge://') ||
-                           bookmark.url.startsWith('about:');
-
-      console.log('[Bookmark Click] Starting...', {
-        url: bookmark.url,
-        isInternalUrl: isInternalUrl,
-        isSidePanel: isSidePanel
-      });
-
-      // 处理内部链接
-      if (isInternalUrl) {
-        console.log('[Bookmark Click] Opening internal URL');
-        chrome.tabs.create({
-          url: bookmark.url,
-          active: true
-        }).then(tab => {
-          console.log('[Bookmark Click] Internal tab created successfully:', tab);
-        }).catch(error => {
-          console.error('[Bookmark Click] Failed to create internal tab:', error);
-        });
-        return;
-      }
-
-      // 处理普通链接
-      if (isSidePanel) {
-        console.log('[Bookmark Click] Opening in Side Panel mode');
-        // 获取侧边栏模式下的链接打开方式设置
-        chrome.storage.sync.get(['sidepanelOpenInNewTab', 'sidepanelOpenInSidepanel'], (result) => {
-          // 默认在新标签页中打开
-          const openInNewTab = result.sidepanelOpenInNewTab !== false;
-          const openInSidepanel = result.sidepanelOpenInSidepanel === true;
-          
-          console.log('[Bookmark Click] Side Panel settings:', {
-            openInNewTab: openInNewTab,
-            openInSidepanel: openInSidepanel
-          });
-          
-          if (openInSidepanel) {
-            // 在侧边栏内打开链接
-            console.log('[Bookmark Click] Opening in Side Panel iframe');
-            // 使用 SidePanelManager 加载 URL
-            try {
-              // 检查 SidePanelManager 是否已定义
-              if (typeof SidePanelManager === 'undefined') {
-                // 如果未定义，则创建一个简单的加载函数
-                console.log('[Bookmark Click] SidePanelManager not defined, using fallback method');
-                const sidePanelContent = document.getElementById('side-panel-content');
-                const sidePanelIframe = document.getElementById('side-panel-iframe');
-                
-                if (sidePanelContent && sidePanelIframe) {
-                  sidePanelContent.style.display = 'block';
-                  sidePanelIframe.src = bookmark.url;
-                  
-                  // 添加返回按钮
-                  let backButton = document.querySelector('.back-to-links');
-                  if (!backButton) {
-                    backButton = document.createElement('div');
-                    backButton.className = 'back-to-links';
-                    backButton.innerHTML = '<span class="material-icons">arrow_back</span>';
-                    document.body.appendChild(backButton);
-                    
-                    // 添加点击事件
-                    backButton.addEventListener('click', () => {
-                      sidePanelContent.style.display = 'none';
-                      backButton.style.display = 'none';
-                    });
-                  }
-                  
-                  // 显示返回按钮
-                  backButton.style.display = 'flex';
-                } else {
-                  console.error('[Bookmark Click] Side panel elements not found, falling back to new tab');
-                  chrome.tabs.create({
-                    url: bookmark.url,
-                    active: true
-                  });
-                }
-              } else if (window.sidePanelManager) {
-                window.sidePanelManager.loadUrl(bookmark.url);
-              } else {
-                // 如果 SidePanelManager 已定义但实例不存在，创建一个新实例
-                window.sidePanelManager = new SidePanelManager();
-                window.sidePanelManager.loadUrl(bookmark.url);
-              }
-            } catch (error) {
-              console.error('[Bookmark Click] Error using SidePanelManager:', error);
-              // 出错时回退到在新标签页中打开
-              chrome.tabs.create({
-                url: bookmark.url,
-                active: true
-              });
-            }
-          } else if (openInNewTab) {
-            // 在新标签页中打开
-            chrome.tabs.create({
-              url: bookmark.url,
-              active: true
-            }).then(tab => {
-              console.log('[Bookmark Click] Tab created successfully:', tab);
-            }).catch(error => {
-              console.error('[Bookmark Click] Failed to create tab:', error);
-            });
-          }
-        });
-      } else {
-        console.log('[Bookmark Click] Opening in Main Window mode');
-        chrome.storage.sync.get(['openInNewTab'], (result) => {
-          if (result.openInNewTab !== false) {
-            window.open(bookmark.url, '_blank');
-          } else {
-            window.location.href = bookmark.url;
-          }
-        });
-      }
+      await openBookmarkBySettings(bookmark);
     } catch (error) {
       console.error('[Bookmark Click] Error:', error);
     } finally {

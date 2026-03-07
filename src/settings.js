@@ -31,7 +31,6 @@ class SettingsManager {
     this.settingsModalContent = document.querySelector('.settings-modal-content');
     this.showHistorySuggestionsCheckbox = document.getElementById('show-history-suggestions');
     this.showBookmarkSuggestionsCheckbox = document.getElementById('show-bookmark-suggestions');
-    this.enableWheelSwitchingCheckbox = document.getElementById('enable-wheel-switching');
     this.openSearchInNewTabCheckbox = document.getElementById('open-search-in-new-tab');
     this.init();
   }
@@ -89,11 +88,6 @@ class SettingsManager {
     // 检查搜索建议设置相关元素
     if (this.showHistorySuggestionsCheckbox || this.showBookmarkSuggestionsCheckbox) {
       this.initSearchSuggestionsSettings();
-    }
-    
-    // 检查滚轮切换设置相关元素
-    if (this.enableWheelSwitchingCheckbox) {
-      this.initWheelSwitchingTab();
     }
     
     // 检查快捷键设置相关元素
@@ -467,32 +461,6 @@ class SettingsManager {
     }
   }
 
-  initWheelSwitchingTab() {
-    const tabButton = document.querySelector('[data-tab="wheel-switching"]');
-    if (tabButton) {
-      tabButton.addEventListener('click', () => {
-        this.switchTab('wheel-switching');
-      });
-    }
-    
-    // 加载保存的设置
-    chrome.storage.sync.get({ enableWheelSwitching: false }, (result) => {
-      if (this.enableWheelSwitchingCheckbox) {
-        this.enableWheelSwitchingCheckbox.checked = result.enableWheelSwitching;
-        
-        // 添加事件监听器
-        this.enableWheelSwitchingCheckbox.addEventListener('change', () => {
-          const isEnabled = this.enableWheelSwitchingCheckbox.checked;
-          chrome.storage.sync.set({ enableWheelSwitching: isEnabled });
-          
-          // 触发自定义事件，通知滚轮切换状态变化
-          document.dispatchEvent(new CustomEvent('wheelSwitchingChanged', {
-            detail: { enabled: isEnabled }
-          }));
-        });
-      }
-    });
-  }
 
   // 添加 debounce 方法来优化性能
   debounce(func, wait) {

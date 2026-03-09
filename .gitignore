@@ -1,1 +1,5 @@
 docs/webdav-backup-prd-and-schema.md
+dist/
+.tmp/
+/*.crx
+/*.pem

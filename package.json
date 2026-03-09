@@ -2,6 +2,7 @@
   "name": "bookmark-extension",
   "version": "1.0.0",
   "scripts": {
+    "package:release": "bash scripts/package-extension.sh dist",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],

@@ -2,6 +2,16 @@
 
 > 本仓库为基于原项目进行功能增强与体验优化的二次开发版本。
 
+## 下载
+
+[![Release](https://img.shields.io/github/v/release/cyl-ly/develop-TabMark-Bookmark-New-Tab?label=GitHub%20Release)](https://github.com/cyl-ly/develop-TabMark-Bookmark-New-Tab/releases/latest)
+[![Download ZIP](https://img.shields.io/badge/Download-ZIP-2ea44f)](https://github.com/cyl-ly/develop-TabMark-Bookmark-New-Tab/releases/latest/download/tabmark-bookmark-new-tab.zip)
+[![Download CRX](https://img.shields.io/badge/Download-CRX-0969da)](https://github.com/cyl-ly/develop-TabMark-Bookmark-New-Tab/releases/latest/download/tabmark-bookmark-new-tab.crx)
+
+- `ZIP` 适合“下载后通过开发者模式加载已解压的扩展程序”
+- `CRX` 适合保留签名安装包，但 Chrome 对非商店来源 `.crx` 的直接安装有限制
+- 最新发布页：`https://github.com/cyl-ly/develop-TabMark-Bookmark-New-Tab/releases/latest`
+
 ## 原项目说明
 
 - 原项目名称：`TabMark-Bookmark New Tab`
